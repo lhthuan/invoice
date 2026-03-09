@@ -562,14 +562,14 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         <!-- Header: logo banner style -->
         <div class="qc-header">
           <div class="qc-header-logo">
-            <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png"
+            <img src="https://lhthuan.github.io/invoice/logo-trungson.png"
                  alt="Trung Sơn Pharma"
                  onerror="this.parentNode.style.display='none'"
                  crossorigin="anonymous">
           </div>
           <div class="qc-header-body">
             <div class="qc-brand-logo">
-              <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width:200px;height:auto;">
+              <img src="https://lhthuan.github.io/invoice/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width:200px;height:auto;">
             </div>
             <div class="qc-header-right">
               <div class="qc-doc-title">Báo giá đơn hàng</div>
@@ -981,26 +981,73 @@ function newOrder(){
 }
 
 /* ══ EXPORT IMAGE ══ */
+
+// Fetch bất kỳ URL ảnh → base64 data URI qua Cloudflare Worker
+async function imgToBase64(url) {
+  if (!url) return null;
+  try {
+    // Dùng worker proxy để bypass CORS — thêm param &type=img
+    const proxyUrl = `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
+    const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('fetch failed');
+    const blob = await r.blob();
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload  = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    // Fallback: thử fetch trực tiếp (đôi khi được nếu server cho phép)
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000), mode: 'cors' });
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      return await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload  = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+    } catch { return null; }
+  }
+}
+
 async function exportImage(mode) {
   if (!cart.length) { toast('Chưa có sản phẩm trong đơn','error'); return; }
   const overlay = document.getElementById('exportOverlay');
   const msg     = document.getElementById('exportMsg');
   overlay.classList.add('open');
-  msg.textContent = mode==='clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+  msg.textContent = 'Đang tải ảnh...';
 
-  // Ẩn nút xoá trong bảng trước khi chụp
+  // Ẩn nút xoá
   document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='0');
 
+  // Tập hợp tất cả img trong quote card, swap sang base64
+  const card = document.getElementById('quoteCard');
+  const imgs = Array.from(card.querySelectorAll('img'));
+  const origSrcs = imgs.map(img => img.src);
+
   try {
-    await new Promise(r=>setTimeout(r,100)); // cho DOM update
-    const card = document.getElementById('quoteCard');
+    msg.textContent = 'Đang chuyển ảnh sang base64...';
+    // Fetch tất cả ảnh song song
+    const b64s = await Promise.all(origSrcs.map(src => imgToBase64(src)));
+    // Swap src sang base64 (chỉ khi fetch thành công)
+    imgs.forEach((img, i) => { if (b64s[i]) img.src = b64s[i]; });
+
+    await new Promise(r=>setTimeout(r,120)); // cho DOM repaint
+    msg.textContent = mode==='clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+
     const canvas = await html2canvas(card, {
       scale: 2,
-      useCORS: true,
-      allowTaint: false,
+      useCORS: false,      // tắt vì đã dùng base64
+      allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
     });
+
+    // Restore src gốc
+    imgs.forEach((img, i) => img.src = origSrcs[i]);
 
     if (mode === 'download') {
       const link = document.createElement('a');
@@ -1008,30 +1055,30 @@ async function exportImage(mode) {
       link.href = canvas.toDataURL('image/jpeg', 0.92);
       link.click();
       toast('Đã tải xuống ảnh JPG ✅', 'success');
+      document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+      overlay.classList.remove('open');
     } else {
-      // Copy to clipboard
       canvas.toBlob(async blob => {
         try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blob })
-          ]);
-          toast('Đã copy ảnh vào clipboard — paste vào chat ngay! ✅', 'success');
-        } catch(e) {
-          // Fallback: download nếu clipboard bị chặn
-          const url = URL.createObjectURL(blob);
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          toast('Đã copy ảnh — paste vào chat ngay! ✅', 'success');
+        } catch {
           const a = document.createElement('a');
-          a.href = url; a.download = `baogía-${orderId.replace('#','')}.png`; a.click();
+          a.href = URL.createObjectURL(blob);
+          a.download = `baogía-${orderId.replace('#','')}.png`;
+          a.click();
           toast('Clipboard bị chặn — đã tải xuống thay thế', 'info');
         }
+        document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
         overlay.classList.remove('open');
       }, 'image/png');
-      return; // early return vì blob callback xử lý overlay
     }
   } catch(e) {
+    imgs.forEach((img, i) => img.src = origSrcs[i]);
+    document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+    overlay.classList.remove('open');
     toast('Lỗi xuất ảnh: ' + e.message, 'error');
   }
-  document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
-  overlay.classList.remove('open');
 }
 
 /* ══ SAVE / LOAD ══ */
