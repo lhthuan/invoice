@@ -877,12 +877,11 @@ function hideFallback() {
 }
 
 /* ══ ADD TO CART ══ */
-function addToCart() {
+async function addToCart() {
   if (!currentSKU) return;
   const d     = currentSKU;
   const qty   = Math.max(1, parseInt(document.getElementById('addQty').value)||1);
   const promo = document.getElementById('isPromo').checked;
-  // Lấy giá từ ô editable (có thể đã chỉnh)
   const price = promo ? 0 : (parseFloat(document.getElementById('skuPriceInput').value) || d.price);
   const unitF = (d.features||[]).find(f => f.name === 'Đơn vị tính');
   const unit  = unitF ? unitF.value : 'Sp';
@@ -892,7 +891,13 @@ function addToCart() {
     ex.qty += qty;
     toast(`Cộng thêm ${qty} — ${d.name}`, 'info');
   } else {
-    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: d.images?.[0] ?? '', promo });
+    // Convert ảnh sang base64 ngay lúc add để export không bị tainted
+    const rawImg = d.images?.[0] ?? '';
+    let imgB64 = '';
+    if (rawImg) {
+      try { imgB64 = await imgToBase64(rawImg); } catch { imgB64 = rawImg; }
+    }
+    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: imgB64 || rawImg, promo });
     toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
   }
   renderPreview();
@@ -1068,35 +1073,34 @@ async function exportImage(mode) {
   const overlay = document.getElementById('exportOverlay');
   const msg     = document.getElementById('exportMsg');
   overlay.classList.add('open');
-  msg.textContent = 'Đang tải ảnh...';
+  msg.textContent = 'Đang chuẩn bị ảnh...';
 
-  // Ẩn nút xoá
   document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='0');
 
-  // Tập hợp tất cả img trong quote card, swap sang base64
   const card = document.getElementById('quoteCard');
+  // Chỉ lấy img chưa phải base64 (logo, icon) — ảnh sản phẩm đã là base64
   const imgs = Array.from(card.querySelectorAll('img'));
   const origSrcs = imgs.map(img => img.src);
 
   try {
-    msg.textContent = 'Đang chuyển ảnh sang base64...';
-    // Fetch tất cả ảnh song song
-    const b64s = await Promise.all(origSrcs.map(src => imgToBase64(src)));
-    // Swap src sang base64 (chỉ khi fetch thành công)
-    imgs.forEach((img, i) => { if (b64s[i]) img.src = b64s[i]; });
+    msg.textContent = 'Đang xử lý ảnh...';
+    const b64s = await Promise.all(origSrcs.map(src => {
+      if (!src || src.startsWith('data:')) return Promise.resolve(src); // đã base64, skip
+      return imgToBase64(src).catch(() => src);
+    }));
+    imgs.forEach((img, i) => { if (b64s[i] && b64s[i] !== img.src) img.src = b64s[i]; });
 
-    await new Promise(r=>setTimeout(r,120)); // cho DOM repaint
-    msg.textContent = mode==='clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+    await new Promise(r => setTimeout(r, 150));
+    msg.textContent = mode === 'clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
 
     const canvas = await html2canvas(card, {
       scale: 2,
-      useCORS: false,      // tắt vì đã dùng base64
-      allowTaint: true,
+      useCORS: false,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
     });
 
-    // Restore src gốc
     imgs.forEach((img, i) => img.src = origSrcs[i]);
 
     if (mode === 'download') {
