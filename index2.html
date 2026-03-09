@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lập Báo Giá 12h11 — Trung Sơn Pharma</title>
+<title>Lập Báo Giá 12h17 — Trung Sơn Pharma</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- html2canvas for image export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -265,18 +265,18 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .export-overlay p{color:#fff;font-weight:600;font-size:14px}
 
 /* ══ THANK YOU FOOTER ══ */
-.qc-thankyou{padding:22px 22px 0;text-align:center}
-.qc-thankyou-title{font-size:17px;font-weight:800;color:var(--orange);margin-bottom:8px}
-.qc-thankyou-sub{font-size:12.5px;color:var(--text-2);line-height:1.6;max-width:420px;margin:0 auto 16px}
+.qc-thankyou{padding:16px 22px 0;text-align:center}
+.qc-thankyou-title{font-size:15px;font-weight:800;color:var(--orange);margin-bottom:5px}
+.qc-thankyou-sub{font-size:12px;color:var(--text-2);line-height:1.55;max-width:400px;margin:0 auto 12px}
 .qc-thankyou-sub strong{color:var(--text)}
-.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 14px}
-.qc-contact-row{display:flex;justify-content:center;gap:0;margin-bottom:0}
-.qc-contact-cell{flex:1;padding:10px 14px;text-align:center;border-right:1px solid var(--border-light)}
+.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 10px}
+.qc-contact-row{display:flex;justify-content:center}
+.qc-contact-cell{flex:1;padding:8px 14px;text-align:center;border-right:1px solid var(--border-light)}
 .qc-contact-cell:last-child{border-right:none}
-.qc-contact-lbl{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
-.qc-contact-val{font-size:15px;font-weight:800;color:var(--orange);font-family:var(--mono)}
-.qc-contact-val.website{font-family:var(--font);font-size:13px;font-weight:700}
-.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:10px 22px;text-align:center;font-size:12px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg)}
+.qc-contact-lbl{font-size:9.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
+.qc-contact-val{font-size:14px;font-weight:800;color:var(--orange);font-family:var(--mono)}
+.qc-contact-val.website{font-family:var(--font);font-size:12.5px;font-weight:700}
+.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:8px 22px;text-align:center;font-size:11.5px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg);margin-top:10px}
 
 /* ══ NOTICE BLOCK in quote card ══ */
 .qc-notice{border-top:1px solid var(--border-light);padding:10px 22px 14px}
@@ -887,18 +887,8 @@ function addToCart() {
     toast(`Cộng thêm ${qty} — ${d.name}`, 'info');
   } else {
     const rawImg = d.images?.[0] ?? '';
-    // Thêm vào cart ngay với URL gốc để hiển thị nhanh
-    const item = { sku: d.sku, name: d.name, price, qty, unit, img: rawImg, _rawImg: rawImg, promo };
-    cart.push(item);
+    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: rawImg, _rawImg: rawImg, promo });
     toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
-    // Convert sang base64 trong nền để export không bị tainted
-    if (rawImg) {
-      imgToBase64(rawImg).then(b64 => {
-        if (b64 && b64.startsWith('data:')) {
-          item.img = b64; // cập nhật item trong cart (reference)
-        }
-      }).catch(() => {});
-    }
   }
   renderPreview();
   document.getElementById('skuResult').classList.remove('show');
@@ -1039,35 +1029,37 @@ function newOrder(){
 
 /* ══ EXPORT IMAGE ══ */
 
-// Fetch bất kỳ URL ảnh → base64 data URI
-// Thử 3 cách theo thứ tự: Worker proxy → fetch cors → Image+Canvas
-async function imgToBase64(url) {
-  if (!url || url.startsWith('data:')) return url;
+/*
+  ⚠️  ĐỂ ẢNH SẢN PHẨM HIỂN THỊ KHI EXPORT:
+  Vào https://dash.cloudflare.com → Workers → trungson-api → Edit code
+  Thay toàn bộ bằng code sau rồi Deploy:
 
-  // Cách 1: Worker proxy (cần Worker đã update hỗ trợ ?imgurl=)
-  try {
-    const proxyUrl = `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
-    const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
-    if (r.ok) {
-      const blob = await r.blob();
-      if (blob.size > 0) return await blobToB64(blob);
+  export default {
+    async fetch(request) {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' };
+      const url = new URL(request.url);
+      const imgurl = url.searchParams.get('imgurl');
+      if (imgurl) {
+        try {
+          const r = await fetch(imgurl);
+          const blob = await r.blob();
+          return new Response(blob, { headers: { ...cors, 'Content-Type': r.headers.get('Content-Type') || 'image/jpeg', 'Cache-Control': 'public,max-age=3600' } });
+        } catch(e) { return new Response('error', { status: 502, headers: cors }); }
+      }
+      const sku = url.searchParams.get('sku');
+      if (!sku) return new Response('{}', { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
+      try {
+        const r = await fetch(`https://trungsoncare.com/?dispatch=api_products.detail&sku=${encodeURIComponent(sku)}`);
+        const data = await r.json();
+        return new Response(JSON.stringify(data), { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public,max-age=300' } });
+      } catch(e) { return new Response(JSON.stringify({status:false,message:e.message}), { status:500, headers:{...cors,'Content-Type':'application/json'} }); }
     }
-  } catch {}
+  }
+*/
 
-  // Cách 2: fetch trực tiếp với CORS
-  try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(5000), mode: 'cors' });
-    if (r.ok) {
-      const blob = await r.blob();
-      if (blob.size > 0) return await blobToB64(blob);
-    }
-  } catch {}
+const WORKER = url => `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
 
-  // Cách 3: Image element + offscreen Canvas (không cần CORS header)
-  return await imgViaCanvas(url);
-}
-
-function blobToB64(blob) {
+async function blobToB64(blob) {
   return new Promise((res, rej) => {
     const fr = new FileReader();
     fr.onload  = () => res(fr.result);
@@ -1076,24 +1068,29 @@ function blobToB64(blob) {
   });
 }
 
-function imgViaCanvas(url) {
-  return new Promise((res) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        c.getContext('2d').drawImage(img, 0, 0);
-        res(c.toDataURL('image/jpeg', 0.9));
-      } catch { res(null); } // tainted canvas — không làm được gì
-    };
-    img.onerror = () => res(null);
-    // Thêm cache-busting nhỏ để tránh cached response không có CORS header
-    img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
-    // Timeout 8s
-    setTimeout(() => res(null), 8000);
-  });
+// Proxy ảnh qua Worker → base64. Trả null nếu fail.
+async function imgToBase64(url) {
+  if (!url || url.startsWith('data:')) return url;
+  try {
+    const r = await fetch(WORKER(url), { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('not ok');
+    const blob = await r.blob();
+    if (!blob.size) throw new Error('empty');
+    const b64 = await blobToB64(blob);
+    // Validate: phải là data URI hợp lệ
+    if (b64 && b64.startsWith('data:image')) return b64;
+    throw new Error('invalid b64');
+  } catch {
+    // Fallback: fetch trực tiếp (chỉ work nếu server có CORS - GitHub Pages thì được)
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      const b64 = await blobToB64(blob);
+      if (b64 && b64.startsWith('data:image')) return b64;
+    } catch {}
+    return null; // fail hoàn toàn
+  }
 }
 
 async function exportImage(mode) {
@@ -1101,28 +1098,29 @@ async function exportImage(mode) {
   const overlay = document.getElementById('exportOverlay');
   const msg     = document.getElementById('exportMsg');
   overlay.classList.add('open');
-  msg.textContent = 'Đang chuẩn bị ảnh...';
+  msg.textContent = 'Đang chuyển ảnh...';
 
-  document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='0');
+  document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '0');
 
   const card = document.getElementById('quoteCard');
-  // Chỉ lấy img chưa phải base64 (logo, icon) — ảnh sản phẩm đã là base64
   const imgs = Array.from(card.querySelectorAll('img'));
   const origSrcs = imgs.map(img => img.src);
 
   try {
-    msg.textContent = 'Đang xử lý ảnh...';
-    // Đợi background base64 conversion trong cart có thể đã xong
-    await new Promise(r => setTimeout(r, 300));
+    // Convert TẤT CẢ ảnh (kể cả đã base64 - skip) song song qua Worker
     const b64s = await Promise.all(origSrcs.map(src => {
-      if (!src || src.startsWith('data:')) return Promise.resolve(src);
-      return imgToBase64(src).catch(() => null);
+      if (!src) return Promise.resolve(null);
+      if (src.startsWith('data:image')) return Promise.resolve(src); // đã ok
+      return imgToBase64(src);
     }));
-    // Fix 10: chỉ swap nếu b64 hợp lệ, không set null vào src
-    imgs.forEach((img, i) => { if (b64s[i] && b64s[i].startsWith('data:')) img.src = b64s[i]; });
 
-    await new Promise(r => setTimeout(r, 150));
-    msg.textContent = mode === 'clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+    // Swap: chỉ thay nếu convert thành công (data URI hợp lệ)
+    imgs.forEach((img, i) => {
+      if (b64s[i] && b64s[i].startsWith('data:image')) img.src = b64s[i];
+    });
+
+    await new Promise(r => setTimeout(r, 100));
+    msg.textContent = mode === 'clipboard' ? 'Đang tạo ảnh...' : 'Đang xuất JPG...';
 
     const canvas = await html2canvas(card, {
       scale: 2,
@@ -1132,15 +1130,16 @@ async function exportImage(mode) {
       logging: false,
     });
 
+    // Restore src gốc
     imgs.forEach((img, i) => img.src = origSrcs[i]);
 
     if (mode === 'download') {
-      const link = document.createElement('a');
-      link.download = `baogía-${orderId.replace('#','')}-${Date.now()}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.92);
-      link.click();
+      const a = document.createElement('a');
+      a.download = `baogía-${orderId.replace('#','')}-${Date.now()}.jpg`;
+      a.href = canvas.toDataURL('image/jpeg', 0.92);
+      a.click();
       toast('Đã tải xuống ảnh JPG ✅', 'success');
-      document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+      document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
       overlay.classList.remove('open');
     } else {
       canvas.toBlob(async blob => {
@@ -1154,13 +1153,13 @@ async function exportImage(mode) {
           a.click();
           toast('Clipboard bị chặn — đã tải xuống thay thế', 'info');
         }
-        document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+        document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
         overlay.classList.remove('open');
       }, 'image/png');
     }
   } catch(e) {
     imgs.forEach((img, i) => img.src = origSrcs[i]);
-    document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+    document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
     overlay.classList.remove('open');
     toast('Lỗi xuất ảnh: ' + e.message, 'error');
   }
