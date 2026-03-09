@@ -261,6 +261,23 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .export-overlay.open{display:flex}
 .export-overlay p{color:#fff;font-weight:600;font-size:14px}
 
+/* ══ NOTICE BLOCK in quote card ══ */
+.qc-notice{border-top:1px solid var(--border-light);padding:10px 22px 14px}
+.qc-notice-inner{background:var(--blue-light);border-left:3px solid var(--blue);border-radius:0 7px 7px 0;padding:10px 13px}
+.qc-notice-title{font-size:11.5px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.qc-notice-title svg{width:13px;height:13px;flex-shrink:0}
+.qc-notice-list{display:flex;flex-direction:column;gap:5px}
+.qc-notice-item{font-size:12px;color:var(--text-2);display:flex;align-items:flex-start;gap:6px;line-height:1.5}
+.qc-notice-item::before{content:"•";color:var(--blue);font-weight:900;flex-shrink:0;margin-top:1px}
+
+/* notice selector pills in form */
+.notice-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.notice-pill{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid var(--border);background:#fff;color:var(--text-2);cursor:pointer;transition:all .15s;font-family:var(--font);white-space:nowrap}
+.notice-pill:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-light)}
+.notice-pill.active{border-color:var(--blue);background:var(--blue);color:#fff}
+.notice-pill.clear-pill{color:var(--text-3);border-style:dashed}
+.notice-pill.clear-pill:hover{border-color:var(--red);color:var(--red);background:var(--red-light)}
+
 /* ══ PRINT ══ */
 @media print{
   .topbar,.panel-left,.pr-toolbar,.qt-del-btn{display:none!important}
@@ -362,6 +379,18 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
                 <option>ZaloPay</option>
                 <option>VNPay</option>
               </select>
+            </div>
+          </div>
+          <!-- Chọn mẫu lưu ý -->
+          <div class="field">
+            <div class="field-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Lưu ý khi nhận hàng
+            </div>
+            <div class="notice-pills">
+              <button class="notice-pill" id="noticePill0" onclick="selectNotice(0)">Không có</button>
+              <button class="notice-pill" id="noticePill1" onclick="selectNotice(1)">🚚 Giao hàng tận nơi</button>
+              <button class="notice-pill" id="noticePill2" onclick="selectNotice(2)">🏪 Nhận hàng tại quầy</button>
             </div>
           </div>
         </div>
@@ -539,9 +568,9 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
                  crossorigin="anonymous">
           </div>
           <div class="qc-header-body">
-              <div class="qc-brand-logo">
-                <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width: 200px; height: auto;">
-              </div>
+            <div class="qc-brand-logo">
+              <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width:200px;height:auto;">
+            </div>
             <div class="qc-header-right">
               <div class="qc-doc-title">Báo giá đơn hàng</div>
               <div class="qc-doc-id" id="qcOrderId">#TSP-000001</div>
@@ -572,6 +601,17 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         <div class="qc-addr">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
           <div><strong>Giao tại:</strong> <span id="qcAddress">—</span> &nbsp;•&nbsp; <strong>Dự kiến:</strong> <span id="qcDelivery">—</span></div>
+        </div>
+
+        <!-- Notice block -->
+        <div class="qc-notice" id="qcNoticeWrap" style="display:none">
+          <div class="qc-notice-inner">
+            <div class="qc-notice-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Lưu ý khi nhận hàng
+            </div>
+            <div class="qc-notice-list" id="qcNoticeList"></div>
+          </div>
         </div>
 
         <!-- Products -->
@@ -688,7 +728,38 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 /* ══ CONFIG ══ */
 const API_URL = sku => `https://trungson-api.lamhieuthuan.workers.dev/?sku=${encodeURIComponent(sku)}`;
 
-/* ══ STATE ══ */
+/* ══ NOTICE TEMPLATES ══ */
+const NOTICES = [
+  null,
+  {
+    label: '🚚 Giao hàng tận nơi',
+    items: [
+      'Đồng kiểm cùng bưu tá khi nhận hàng; không khui, không dùng thử sản phẩm.',
+      'Không nhận đổi trả nếu sản phẩm đã bị khui/mở bao bì.',
+      'Không áp dụng đổi trả đối với: Hàng khuyến mãi, hàng bảo quản lạnh và một số sản phẩm đặc thù.'
+    ]
+  },
+  {
+    label: '🏪 Nhận hàng tại quầy',
+    items: [
+      'Vui lòng đọc Tên và Số điện thoại để nhân viên đối chiếu và giao hàng.',
+      'Kiểm tra kỹ hàng hóa và tiền thừa trước khi rời khỏi quầy.',
+      'Không áp dụng đổi trả đối với: Hàng khuyến mãi, hàng bảo quản lạnh và một số sản phẩm đặc thù.'
+    ]
+  }
+];
+
+let selectedNotice = 0; // 0 = none, 1 = giao tận nơi, 2 = tại quầy
+
+function selectNotice(idx) {
+  selectedNotice = idx;
+  // Update pills UI
+  NOTICES.forEach((_, i) => {
+    const pill = document.getElementById('noticePill' + i);
+    if (pill) pill.classList.toggle('active', i === idx);
+  });
+  renderPreview();
+}
 let cart = [];
 let currentSKU = null;
 let counter  = parseInt(localStorage.getItem('tsp_ctr') || '1');
@@ -823,6 +894,17 @@ function renderPreview() {
   g('qcDelivery').textContent = dd ? fmtDate(new Date(dd+'T00:00:00')) + ' (Giao tại nhà)' : '—';
   g('qcPayment').textContent  = val('paymentMethod');
 
+  // Notice block
+  const noticeWrap = g('qcNoticeWrap');
+  const noticeList = g('qcNoticeList');
+  const n = NOTICES[selectedNotice];
+  if (n) {
+    noticeList.innerHTML = n.items.map(t => `<div class="qc-notice-item">${t}</div>`).join('');
+    noticeWrap.style.display = 'block';
+  } else {
+    noticeWrap.style.display = 'none';
+  }
+
   const BADGE = `<span class="promo-badge">🎁 KM</span>`;
   const tbody = g('qcTbody');
   if (!cart.length) {
@@ -891,6 +973,8 @@ function newOrder(){
   document.getElementById('discountDirect').value=0;
   document.getElementById('discountVoucher').value=0;
   document.getElementById('shipFee').value=0;
+  selectedNotice = 0;
+  NOTICES.forEach((_,i)=>{ const p=document.getElementById('noticePill'+i); if(p) p.classList.toggle('active', i===0); });
   document.getElementById('skuResult').classList.remove('show');
   document.getElementById('jsonFallback').classList.remove('show');
   renderPreview(); toast('Đơn mới: '+orderId,'success');
@@ -1073,6 +1157,7 @@ function toast(msg,type='info'){
 
 /* ══ INIT ══ */
 document.getElementById('deliveryDate').value=new Date(Date.now()+2*86400000).toISOString().split('T')[0];
+document.getElementById('noticePill0').classList.add('active');
 renderPreview();
 refreshSavedUI();
 </script>
