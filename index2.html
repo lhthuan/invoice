@@ -187,8 +187,10 @@ table.qt tr:last-child td{border-bottom:none}
 table.qt tbody tr:hover td{background:var(--green-xlight)}
 table.qt tbody tr.promo-row td{background:#fdf4ff}
 table.qt tbody tr.promo-row:hover td{background:#fae8ff}
-.qt-prod{display:flex;align-items:center;gap:10px}
-.qt-img{width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0}
+.qt-prod{display:flex;align-items:center;gap:12px}
+.qt-img{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0;box-shadow:var(--shadow-sm)}
+.qt-img-placeholder{width:56px;height:56px;border-radius:8px;background:var(--surface-3);flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-light)}
+.qt-img-placeholder svg{width:22px;height:22px;opacity:.25}
 .qt-prod-name{font-weight:600;font-size:12.5px;line-height:1.3}
 .qt-prod-sku{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
 .qt-stt{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:600;width:28px}
@@ -213,7 +215,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .sum-label{color:var(--text-2)}
 .sum-val{font-family:var(--mono);font-size:13px;color:var(--text-2)}
 .sum-val.neg{color:var(--red);font-weight:700}
-.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--green);border-radius:var(--r-sm);color:#fff;margin-top:4px}
+.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);border-radius:var(--r-sm);color:#fff;margin-top:4px;box-shadow:0 4px 14px rgba(232,93,4,.3)}
 .sum-total-label{font-weight:700;font-size:14px}
 .sum-total-val{font-family:var(--mono);font-size:21px;font-weight:800}
 .sum-ship-ref{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 14px;background:var(--amber-light);border-radius:var(--r-sm);margin-top:8px;border:1px dashed #f59e0b;gap:12px}
@@ -266,6 +268,20 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .export-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
 .export-overlay.open{display:flex}
 .export-overlay p{color:#fff;font-weight:600;font-size:14px}
+
+/* ══ THANK YOU FOOTER ══ */
+.qc-thankyou{padding:22px 22px 0;text-align:center}
+.qc-thankyou-title{font-size:17px;font-weight:800;color:var(--orange);margin-bottom:8px}
+.qc-thankyou-sub{font-size:12.5px;color:var(--text-2);line-height:1.6;max-width:420px;margin:0 auto 16px}
+.qc-thankyou-sub strong{color:var(--text)}
+.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 14px}
+.qc-contact-row{display:flex;justify-content:center;gap:0;margin-bottom:0}
+.qc-contact-cell{flex:1;padding:10px 14px;text-align:center;border-right:1px solid var(--border-light)}
+.qc-contact-cell:last-child{border-right:none}
+.qc-contact-lbl{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.qc-contact-val{font-size:15px;font-weight:800;color:var(--orange);font-family:var(--mono)}
+.qc-contact-val.website{font-family:var(--font);font-size:13px;font-weight:700}
+.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:10px 22px;text-align:center;font-size:12px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg)}
 
 /* ══ NOTICE BLOCK in quote card ══ */
 .qc-notice{border-top:1px solid var(--border-light);padding:10px 22px 14px}
@@ -685,6 +701,26 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           <div class="qc-note-text" id="qcNoteText"></div>
         </div>
 
+        <!-- Thank you footer -->
+        <div class="qc-thankyou">
+          <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
+          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi. Hy vọng các sản phẩm từ <strong>Trung Sơn Care</strong> sẽ chăm sóc tốt nhất cho sức khỏe gia đình bạn.</div>
+          <hr class="qc-thankyou-divider">
+          <div class="qc-contact-row">
+            <div class="qc-contact-cell">
+              <div class="qc-contact-lbl">Hotline 24/7</div>
+              <div class="qc-contact-val">1800 5588 98</div>
+            </div>
+            <div class="qc-contact-cell">
+              <div class="qc-contact-lbl">Website</div>
+              <div class="qc-contact-val website">trungsoncare.com</div>
+            </div>
+          </div>
+        </div>
+        <div class="qc-thankyou-bar">
+          Hệ thống nhà thuốc Trung Sơn Pharma — <em>"Chất lượng cao, Niềm tin lớn"</em>
+        </div>
+
         </div><!-- /quote-card-inner -->
       </div>
     </div>
@@ -928,7 +964,10 @@ function renderPreview() {
       <tr class="${p.promo?'promo-row':''}">
         <td class="qt-stt">${i+1}</td>
         <td><div class="qt-prod">
-          ${p.img?`<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="" crossorigin="anonymous">`:''}
+          ${p.img
+            ? `<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="">`
+            : `<div class="qt-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`
+          }
           <div>
             <div class="qt-prod-name">${p.name}${p.promo?BADGE:''}</div>
             ${p.sku?`<div class="qt-prod-sku">SKU: ${p.sku}</div>`:''}
