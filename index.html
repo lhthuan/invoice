@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lập Báo Giá — Trung Sơn Pharma</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- html2canvas for image export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
   --green:#0a6e4f;--green-dark:#064d37;--green-mid:#12a374;
@@ -28,10 +30,9 @@ body{font-family:var(--font);background:var(--surface-2);color:var(--text);font-
 /* ══ TOPBAR ══ */
 .topbar{background:var(--green);color:#fff;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .brand{display:flex;align-items:center;gap:10px}
-.brand-icon{width:36px;height:36px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
-.brand-icon img{width:30px;height:30px;object-fit:contain}
-.brand-text{font-weight:800;font-size:15px;letter-spacing:.2px}
-.brand-sub{font-size:10.5px;opacity:.65;font-weight:400;margin-top:-2px}
+.brand-icon{height:36px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+.brand-icon img{height:36px;width:auto;object-fit:contain}
+.brand-sub{font-size:10.5px;opacity:.65;font-weight:400;margin-top:-1px}
 .topbar-actions{display:flex;gap:7px;align-items:center}
 
 /* ══ BUTTONS ══ */
@@ -49,6 +50,8 @@ body{font-family:var(--font);background:var(--surface-2);color:var(--text);font-
 .btn-amber:hover{background:#b45309}
 .btn-pink{background:var(--pink);color:#fff}
 .btn-pink:hover{background:#be185d}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-blue:hover{background:#1d4ed8}
 .btn-sm{padding:5px 10px;font-size:12px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 
@@ -66,8 +69,12 @@ body{font-family:var(--font);background:var(--surface-2);color:var(--text);font-
 .sec-title svg{width:13px;height:13px;opacity:.7}
 .form-grid{display:grid;gap:9px}
 .g2{grid-template-columns:1fr 1fr}
+
+/* field — label always above input, no wrapping issue */
 .field{display:flex;flex-direction:column;gap:4px}
-.field > .field-label{font-size:11.5px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.field-label{font-size:11.5px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:5px;min-height:20px;line-height:1.3}
+.field-label .copy-btn{flex-shrink:0}
+
 input[type=text],input[type=date],input[type=number],select,textarea{
   width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--r-sm);
   font-family:var(--font);font-size:13px;color:var(--text);background:#fff;outline:none;
@@ -76,10 +83,9 @@ input[type=text],input[type=date],input[type=number],select,textarea{
 input:focus,select:focus,textarea:focus{border-color:var(--green-mid);box-shadow:0 0 0 3px rgba(18,163,116,.12)}
 textarea{resize:none;min-height:54px}
 
-/* copy btn inline */
-.copy-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:var(--green-light);color:var(--green);border:none;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.copy-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:var(--green-light);color:var(--green);border:none;cursor:pointer;transition:all .15s;font-family:var(--font);white-space:nowrap}
 .copy-btn:hover{background:var(--green);color:#fff}
-.copy-btn svg{width:11px;height:11px}
+.copy-btn svg{width:11px;height:11px;flex-shrink:0}
 
 /* ══ SKU SECTION ══ */
 .sku-box{display:flex;gap:7px}
@@ -92,23 +98,28 @@ textarea{resize:none;min-height:54px}
 .sku-info{flex:1;min-width:0}
 .sku-name{font-weight:700;font-size:13px;line-height:1.3;margin-bottom:3px}
 .sku-meta{font-size:11px;color:var(--text-2);font-family:var(--mono)}
-.sku-price{font-weight:800;color:var(--green);font-size:14px;font-family:var(--mono);margin-top:4px}
-.sku-add-row{padding:9px 10px;background:#fff;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border-light)}
-.qty-ctrl{display:flex;align-items:center;gap:7px;flex:1;font-size:12px;font-weight:600;color:var(--text-2)}
-.qty-ctrl input{width:60px;text-align:center;font-family:var(--mono);font-weight:700;padding:5px 8px}
-/* promo toggle inside sku add row */
-.promo-toggle{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--pink);cursor:pointer;user-select:none;white-space:nowrap}
-.promo-toggle input[type=checkbox]{accent-color:var(--pink);width:14px;height:14px;cursor:pointer}
+
+/* editable price row */
+.sku-price-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.sku-price-label{font-size:11px;color:var(--text-3);font-weight:600;white-space:nowrap}
+.sku-price-input{width:110px;font-family:var(--mono);font-weight:800;font-size:14px;color:var(--green);padding:3px 7px;border:1.5px solid var(--border);border-radius:6px;background:#fff;outline:none;text-align:right}
+.sku-price-input:focus{border-color:var(--green-mid);box-shadow:0 0 0 3px rgba(18,163,116,.12)}
+.sku-price-unit{font-size:11.5px;color:var(--text-3)}
+
+.sku-add-row{padding:9px 10px;background:#fff;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border-light);flex-wrap:nowrap}
+.qty-ctrl{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text-2);flex-shrink:0}
+.qty-ctrl input{width:52px;text-align:center;font-family:var(--mono);font-weight:700;padding:4px 6px}
+.promo-toggle{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--pink);cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0}
+.promo-toggle input[type=checkbox]{accent-color:var(--pink);width:13px;height:13px;cursor:pointer}
 
 /* JSON fallback */
-.json-fallback{margin-top:10px;display:none;animation:slideDown .2s ease}
-.json-fallback.show{display:block}
+.json-fallback{margin-top:10px;display:none}
+.json-fallback.show{display:block;animation:slideDown .2s ease}
 .json-fallback-hdr{font-size:11.5px;font-weight:700;color:var(--amber);margin-bottom:5px;display:flex;align-items:center;gap:5px}
 .json-fallback-hdr svg{width:13px;height:13px}
 .json-fallback-hint{font-size:11px;color:var(--text-3);margin-bottom:6px;line-height:1.6}
 .json-fallback-hint a{color:var(--green);font-family:var(--mono);word-break:break-all;font-size:10.5px}
 .json-fallback textarea{width:100%;min-height:80px;font-family:var(--mono);font-size:11.5px;resize:vertical;border:1.5px solid var(--amber);border-radius:var(--r-sm);padding:8px;color:var(--text);background:#fffdf5;outline:none}
-.json-fallback textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12)}
 .json-fallback-actions{display:flex;gap:7px;margin-top:7px}
 
 /* ══ SAVED LIST ══ */
@@ -135,102 +146,94 @@ textarea{resize:none;min-height:54px}
 /* ══ QUOTE CARD ══ */
 .quote-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:hidden;max-width:720px;margin:0 auto}
 
-/* header */
-.qc-header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);padding:18px 24px;display:flex;align-items:center;justify-content:space-between;color:#fff}
-.qc-brand{display:flex;align-items:center;gap:12px}
-.qc-logo-wrap{width:52px;height:52px;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;border:2px solid rgba(255,255,255,.3)}
-.qc-logo-wrap img{width:46px;height:46px;object-fit:contain}
-.qc-brand-name{font-weight:800;font-size:18px;letter-spacing:.2px;line-height:1.2}
-.qc-header-right{text-align:right}
-.qc-doc-title{font-size:10.5px;font-weight:700;opacity:.8;text-transform:uppercase;letter-spacing:1.2px}
-.qc-doc-id{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:3px}
-.qc-doc-date{font-size:10.5px;opacity:.6;margin-top:2px}
+/* Header: full-width banner logo style */
+.qc-header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);padding:0;display:flex;align-items:stretch;color:#fff;min-height:72px}
+.qc-header-logo{padding:10px 20px;display:flex;align-items:center;background:rgba(0,0,0,.12);border-right:1px solid rgba(255,255,255,.15);flex-shrink:0}
+.qc-header-logo img{height:52px;width:auto;object-fit:contain;display:block}
+.qc-header-body{flex:1;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.qc-brand-name{font-weight:800;font-size:20px;letter-spacing:.3px;line-height:1.1}
+.qc-brand-slogan{font-size:11px;opacity:.72;font-weight:500;margin-top:3px;letter-spacing:.3px}
+.qc-header-right{text-align:right;flex-shrink:0}
+.qc-doc-title{font-size:10px;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:1.2px}
+.qc-doc-id{font-family:var(--mono);font-size:16px;font-weight:700;margin-top:3px}
+.qc-doc-date{font-size:10px;opacity:.55;margin-top:2px}
 
 /* parties */
 .qc-info{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border-light)}
-.qc-info-col{padding:14px 22px}
+.qc-info-col{padding:13px 22px}
 .qc-info-col:first-child{border-right:1px solid var(--border-light)}
-.qc-info-label{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.qc-info-label{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:6px;display:flex;align-items:center;gap:5px}
 .qc-info-label svg{width:12px;height:12px}
-.qc-info-name{font-weight:700;font-size:14px;margin-bottom:3px}
-.qc-info-phone{font-family:var(--mono);font-size:12.5px;color:var(--text-2)}
-.qc-addr{display:flex;align-items:flex-start;gap:7px;padding:10px 22px;background:var(--surface-2);border-bottom:1px solid var(--border-light);font-size:12.5px;color:var(--text-2)}
+.qc-info-name{font-weight:700;font-size:14px;margin-bottom:2px}
+.qc-info-phone{font-family:var(--mono);font-size:12px;color:var(--text-2)}
+.qc-addr{display:flex;align-items:flex-start;gap:7px;padding:9px 22px;background:var(--surface-2);border-bottom:1px solid var(--border-light);font-size:12px;color:var(--text-2)}
 .qc-addr svg{width:14px;height:14px;color:var(--green-mid);flex-shrink:0;margin-top:1px}
 .qc-addr strong{color:var(--text)}
 
 /* table */
 .qc-table-wrap{padding:14px 22px}
-.qc-table-title{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:11px;display:flex;align-items:center;gap:6px}
+.qc-table-title{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .qc-table-title svg{width:13px;height:13px}
 table.qt{width:100%;border-collapse:collapse}
-table.qt th{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;padding:8px 9px;text-align:left;background:var(--surface-2);border-bottom:2px solid var(--border)}
+table.qt th{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;padding:7px 9px;text-align:left;background:var(--surface-2);border-bottom:2px solid var(--border)}
 table.qt th:not(:first-child):not(:nth-child(2)){text-align:right}
-table.qt td{padding:10px 9px;border-bottom:1px solid var(--border-light);vertical-align:middle}
+table.qt td{padding:9px 9px;border-bottom:1px solid var(--border-light);vertical-align:middle}
 table.qt td:not(:first-child):not(:nth-child(2)){text-align:right}
 table.qt tr:last-child td{border-bottom:none}
 table.qt tbody tr:hover td{background:var(--green-xlight)}
-/* promo row */
 table.qt tbody tr.promo-row td{background:#fdf4ff}
 table.qt tbody tr.promo-row:hover td{background:#fae8ff}
 .qt-prod{display:flex;align-items:center;gap:10px}
-.qt-img{width:42px;height:42px;border-radius:6px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0}
+.qt-img{width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0}
 .qt-prod-name{font-weight:600;font-size:12.5px;line-height:1.3}
 .qt-prod-sku{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
-.qt-stt{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:600;width:30px}
+.qt-stt{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:600;width:28px}
 .qt-price{font-family:var(--mono);font-size:12px;color:var(--text-2)}
-.qt-price.free{color:var(--pink);font-weight:700;text-decoration:line-through;opacity:.6}
+.qt-price.free{color:var(--pink);font-weight:700}
 .qt-qty-cell{white-space:nowrap;text-align:center!important}
-.qt-qty-input{width:52px;text-align:center;padding:4px 6px;font-family:var(--mono);font-size:12px;font-weight:700;border:1.5px solid var(--border);border-radius:6px;background:#fff}
-.qt-unit{font-size:11px;color:var(--text-3);margin-left:3px}
+.qt-qty-input{width:50px;text-align:center;padding:3px 5px;font-family:var(--mono);font-size:12px;font-weight:700;border:1.5px solid var(--border);border-radius:6px;background:#fff}
+.qt-unit{font-size:10.5px;color:var(--text-3);margin-left:3px}
 .qt-total{font-family:var(--mono);font-size:13px;font-weight:700}
 .qt-total.free-total{color:var(--pink);font-weight:800}
 .qt-del-btn{background:none;border:none;cursor:pointer;color:var(--red);padding:4px;border-radius:4px;opacity:0;transition:all .15s;display:flex}
 table.qt tbody tr:hover .qt-del-btn{opacity:1}
-.qt-del-btn:hover{background:var(--red-light)}
 .qt-del-btn svg{width:13px;height:13px}
-/* promo badge */
 .promo-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:20px;font-size:10px;font-weight:700;background:var(--pink-light);color:var(--pink);margin-left:5px;white-space:nowrap;vertical-align:middle}
-.promo-badge svg{width:9px;height:9px}
-
 .no-prod-row td{text-align:center!important;padding:36px!important;color:var(--text-3)}
 .no-prod-row svg{display:block;margin:0 auto 10px;opacity:.25;width:36px;height:36px}
 
 /* summary */
-.qc-summary{background:var(--surface-2);padding:14px 22px;border-top:2px solid var(--border-light)}
-.sum-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.qc-summary{background:var(--surface-2);padding:13px 22px;border-top:2px solid var(--border-light)}
+.sum-rows{display:flex;flex-direction:column;gap:7px;margin-bottom:11px}
 .sum-row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
 .sum-label{color:var(--text-2)}
 .sum-val{font-family:var(--mono);font-size:13px;color:var(--text-2)}
 .sum-val.neg{color:var(--red);font-weight:700}
-.sum-divider{height:1px;background:var(--border);margin:4px 0}
-.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:13px 18px;background:var(--green);border-radius:var(--r-sm);color:#fff;margin-top:4px}
+.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--green);border-radius:var(--r-sm);color:#fff;margin-top:4px}
 .sum-total-label{font-weight:700;font-size:14px}
 .sum-total-val{font-family:var(--mono);font-size:21px;font-weight:800}
-/* ship ref row — shown below total, not counted in bill */
-.sum-ship-ref{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:var(--amber-light);border-radius:var(--r-sm);margin-top:8px;border:1px dashed #f59e0b}
-.sum-ship-ref-label{font-size:12px;color:var(--amber);font-weight:600;display:flex;align-items:center;gap:5px}
-.sum-ship-ref-label svg{width:13px;height:13px}
-.sum-ship-ref-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--amber)}
+.sum-ship-ref{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 14px;background:var(--amber-light);border-radius:var(--r-sm);margin-top:8px;border:1px dashed #f59e0b;gap:12px}
+.sum-ship-ref-label{font-size:11.5px;color:var(--amber);font-weight:600;display:flex;align-items:center;gap:5px;flex:1}
+.sum-ship-ref-label svg{width:13px;height:13px;flex-shrink:0}
+.sum-ship-ref-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--amber);white-space:nowrap}
 
 /* footer */
 .qc-footer{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border-light)}
-.qcf-cell{padding:12px 22px;display:flex;align-items:center;gap:9px;font-size:12.5px}
+.qcf-cell{padding:11px 22px;display:flex;align-items:center;gap:9px;font-size:12.5px}
 .qcf-cell:first-child{border-right:1px solid var(--border-light)}
-.qcf-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.qcf-icon svg{width:15px;height:15px}
+.qcf-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qcf-icon svg{width:14px;height:14px}
 .qcf-icon.pt{background:var(--amber-light);color:var(--amber)}
 .qcf-icon.pm{background:var(--blue-light);color:var(--blue)}
-.qcf-lbl{font-size:10.5px;color:var(--text-3);margin-bottom:2px}
+.qcf-lbl{font-size:10px;color:var(--text-3);margin-bottom:2px}
 .qcf-val{font-weight:700;font-size:13px}
 .qcf-val.pt-val{color:var(--amber);font-family:var(--mono)}
-
-/* note */
-.qc-note{padding:10px 22px 14px;border-top:1px solid var(--border-light)}
+.qc-note{padding:9px 22px 13px;border-top:1px solid var(--border-light)}
 .qc-note-text{font-size:12px;color:var(--text-2);font-style:italic;background:var(--amber-light);border-left:3px solid var(--amber);padding:8px 11px;border-radius:0 6px 6px 0}
 
 /* ══ TOAST ══ */
-.toast-wrap{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:7px;z-index:999;pointer-events:none}
-.toast{padding:10px 15px;border-radius:var(--r-sm);box-shadow:var(--shadow-lg);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;animation:tIn .22s ease;pointer-events:all}
+.toast-wrap{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:7px;z-index:9999;pointer-events:none}
+.toast{padding:10px 15px;border-radius:var(--r-sm);box-shadow:var(--shadow-lg);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;animation:tIn .22s ease;pointer-events:all;max-width:320px}
 .toast svg{width:15px;height:15px;flex-shrink:0}
 .toast.success{background:var(--green);color:#fff}
 .toast.error{background:var(--red);color:#fff}
@@ -253,6 +256,11 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .modal-body{flex:1;overflow-y:auto;padding:18px 20px}
 .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
 
+/* export overlay */
+.export-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.export-overlay.open{display:flex}
+.export-overlay p{color:#fff;font-weight:600;font-size:14px}
+
 /* ══ PRINT ══ */
 @media print{
   .topbar,.panel-left,.pr-toolbar,.qt-del-btn{display:none!important}
@@ -265,15 +273,12 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 </head>
 <body>
 
-<!-- ══ TOP BAR ══ -->
+<!-- TOPBAR -->
 <div class="topbar">
   <div class="brand">
     <div class="brand-icon">
-      <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Logo" onerror="this.style.display='none'">
-    </div>
-    <div>
-      <div class="brand-text">Trung Sơn Pharma</div>
-      <div class="brand-sub">Công cụ lập báo giá</div>
+      <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Trung Sơn Pharma"
+           onerror="this.parentNode.style.display='none'">
     </div>
   </div>
   <div class="topbar-actions">
@@ -285,6 +290,14 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Quản lý đơn
     </button>
+    <button class="btn btn-ghost" id="btnExportImg" onclick="exportImage('download')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Xuất JPG
+    </button>
+    <button class="btn btn-ghost" id="btnCopyImg" onclick="exportImage('clipboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      Copy ảnh
+    </button>
     <button class="btn btn-white" onclick="printQuote()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       In / PDF
@@ -294,7 +307,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 
 <div class="app">
 
-  <!-- ══ LEFT PANEL ══ -->
+  <!-- LEFT PANEL -->
   <div class="panel-left">
     <div class="pl-scroll">
 
@@ -319,7 +332,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="field">
               <div class="field-label">
                 Người nhận
-                <button class="copy-btn" onclick="copySender()" title="Copy từ người đặt">
+                <button class="copy-btn" onclick="copySender()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                   Copy từ người đặt
                 </button>
@@ -368,56 +381,61 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </button>
         </div>
 
-        <!-- Kết quả SKU -->
+        <!-- SKU result -->
         <div class="sku-result" id="skuResult">
           <div class="sku-top">
             <img id="skuImg" class="sku-img" src="" alt="">
             <div class="sku-info">
               <div class="sku-name" id="skuName"></div>
               <div class="sku-meta" id="skuMeta"></div>
-              <div class="sku-price" id="skuPrice"></div>
+              <!-- Editable price -->
+              <div class="sku-price-row">
+                <span class="sku-price-label">Giá bán:</span>
+                <input type="number" class="sku-price-input" id="skuPriceInput" min="0" step="500">
+                <span class="sku-price-unit" id="skuUnit2">₫ / Sp</span>
+              </div>
             </div>
           </div>
           <div class="sku-add-row">
             <div class="qty-ctrl">
               <span>SL:</span>
-              <input type="number" id="addQty" value="1" min="1" style="width:56px;text-align:center;font-family:var(--mono);font-weight:700">
-              <span id="skuUnit" style="font-size:11.5px;color:var(--text-3)">Sp</span>
+              <input type="number" id="addQty" value="1" min="1">
+              <span id="skuUnit" style="font-size:11px;color:var(--text-3)">Sp</span>
             </div>
             <label class="promo-toggle">
               <input type="checkbox" id="isPromo">
-              🎁 KM (miễn phí)
+              🎁 KM
             </label>
-            <button class="btn btn-green btn-sm" onclick="addToCart()">
+            <button class="btn btn-green btn-sm" onclick="addToCart()" style="margin-left:auto">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Thêm
             </button>
           </div>
         </div>
 
-        <!-- Fallback paste JSON thủ công -->
+        <!-- JSON fallback -->
         <div class="json-fallback" id="jsonFallback">
           <div class="json-fallback-hdr">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            API bị chặn CORS — Paste JSON thủ công:
+            CORS blocked — Paste JSON thủ công:
           </div>
           <div class="json-fallback-hint">
-            1. Mở link: <a id="apiLink" href="#" target="_blank"></a><br>
-            2. Ctrl+A → Copy toàn bộ → Paste vào ô bên dưới
+            Mở link: <a id="apiLink" href="#" target="_blank"></a><br>
+            Ctrl+A → Copy → Paste bên dưới
           </div>
           <textarea id="jsonPasteArea" placeholder="Paste JSON response vào đây..."></textarea>
           <div class="json-fallback-actions">
             <button class="btn btn-amber btn-sm" onclick="parseJSON()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"/></svg>
-              Xác nhận JSON
+              Xác nhận
             </button>
             <button class="btn btn-outline btn-sm" onclick="hideFallback()">Huỷ</button>
           </div>
         </div>
 
-        <!-- Thêm hàng KM thủ công (không cần SKU) -->
+        <!-- Thêm KM thủ công -->
         <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border-light)">
-          <div style="font-size:11px;font-weight:700;color:var(--pink);margin-bottom:7px;display:flex;align-items:center;gap:5px">
+          <div style="font-size:11px;font-weight:700;color:var(--pink);margin-bottom:8px;display:flex;align-items:center;gap:5px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
             Thêm hàng khuyến mãi thủ công
           </div>
@@ -432,7 +450,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             </div>
             <div class="field">
               <div class="field-label">Đơn vị</div>
-              <input type="text" id="promoUnit" value="Sp" placeholder="Sp / Hộp...">
+              <input type="text" id="promoUnit" value="Sp" placeholder="Sp/Hộp...">
             </div>
           </div>
           <button class="btn btn-pink btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="addManualPromo()">
@@ -491,9 +509,9 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
       </div>
 
     </div>
-  </div><!-- /panel-left -->
+  </div>
 
-  <!-- ══ RIGHT PANEL ══ -->
+  <!-- RIGHT PANEL -->
   <div class="panel-right">
     <div class="pr-toolbar">
       <div class="pr-title">Xem trước báo giá <span id="previewId">—</span></div>
@@ -512,24 +530,28 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
     <div class="pr-scroll">
       <div class="quote-card" id="quoteCard">
 
-        <!-- Header cố định: logo + tên -->
+        <!-- Header: logo banner style -->
         <div class="qc-header">
-          <div class="qc-brand">
-            <div class="qc-logo-wrap">
-              <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png" alt="Trung Sơn" onerror="this.style.display='none'">
-            </div>
-            <div>
-              <div class="qc-brand-name">Trung Sơn Pharma</div>
-            </div>
+          <div class="qc-header-logo">
+            <img src="https://trungsoncare.com/images/logos/8/logo-trungson.png"
+                 alt="Trung Sơn Pharma"
+                 onerror="this.parentNode.style.display='none'"
+                 crossorigin="anonymous">
           </div>
-          <div class="qc-header-right">
-            <div class="qc-doc-title">Báo giá đơn hàng</div>
-            <div class="qc-doc-id" id="qcOrderId">#TSP-000001</div>
-            <div class="qc-doc-date" id="qcDate"></div>
+          <div class="qc-header-body">
+            <div>
+              <div class="qc-brand-name">TRUNG SƠN Pharma</div>
+              <div class="qc-brand-slogan">Chất lượng cao – Niềm tin lớn</div>
+            </div>
+            <div class="qc-header-right">
+              <div class="qc-doc-title">Báo giá đơn hàng</div>
+              <div class="qc-doc-id" id="qcOrderId">#TSP-000001</div>
+              <div class="qc-doc-date" id="qcDate"></div>
+            </div>
           </div>
         </div>
 
-        <!-- Thông tin người đặt / nhận -->
+        <!-- Parties -->
         <div class="qc-info">
           <div class="qc-info-col">
             <div class="qc-info-label">
@@ -553,7 +575,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           <div><strong>Giao tại:</strong> <span id="qcAddress">—</span> &nbsp;•&nbsp; <strong>Dự kiến:</strong> <span id="qcDelivery">—</span></div>
         </div>
 
-        <!-- Bảng sản phẩm -->
+        <!-- Products -->
         <div class="qc-table-wrap">
           <div class="qc-table-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
@@ -562,12 +584,12 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           <table class="qt">
             <thead>
               <tr>
-                <th style="width:32px">STT</th>
+                <th style="width:30px">STT</th>
                 <th>Tên sản phẩm</th>
                 <th style="width:90px">Đơn giá</th>
-                <th style="width:88px;text-align:center!important">Số lượng</th>
+                <th style="width:86px;text-align:center!important">Số lượng</th>
                 <th style="width:100px">Thành tiền</th>
-                <th style="width:26px"></th>
+                <th style="width:24px"></th>
               </tr>
             </thead>
             <tbody id="qcTbody">
@@ -579,7 +601,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </table>
         </div>
 
-        <!-- Tổng kết -->
+        <!-- Summary -->
         <div class="qc-summary">
           <div class="sum-rows">
             <div class="sum-row"><span class="sum-label">Tổng tiền ban đầu</span><span class="sum-val" id="qcSubtotal">0 ₫</span></div>
@@ -590,7 +612,6 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <span class="sum-total-label">Thành tiền</span>
             <span class="sum-total-val" id="qcTotal">0 ₫</span>
           </div>
-          <!-- Phí ship tham khảo — không cộng vào bill -->
           <div class="sum-ship-ref" id="qcShipRefRow" style="display:none">
             <span class="sum-ship-ref-label">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
@@ -600,35 +621,35 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
 
-        <!-- Footer: điểm + thanh toán -->
+        <!-- Footer -->
         <div class="qc-footer">
           <div class="qcf-cell">
-            <div class="qcf-icon pt">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            </div>
+            <div class="qcf-icon pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
             <div><div class="qcf-lbl">Điểm thưởng tích lũy</div><div class="qcf-val pt-val" id="qcPoints">+ 0 điểm</div></div>
           </div>
           <div class="qcf-cell">
-            <div class="qcf-icon pm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-            </div>
+            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
             <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt khi nhận</div></div>
           </div>
         </div>
-
-        <!-- Ghi chú -->
         <div class="qc-note" id="qcNoteWrap" style="display:none">
           <div class="qc-note-text" id="qcNoteText"></div>
         </div>
 
-      </div><!-- /quote-card -->
+      </div>
     </div>
-  </div><!-- /panel-right -->
+  </div>
 
-</div><!-- /app -->
+</div>
 
 <!-- TOAST -->
 <div class="toast-wrap" id="toastWrap"></div>
+
+<!-- Export loading overlay -->
+<div class="export-overlay" id="exportOverlay">
+  <div class="spinner" style="width:32px;height:32px;border-width:4px"></div>
+  <p id="exportMsg">Đang xuất ảnh...</p>
+</div>
 
 <!-- SAVE MODAL -->
 <div class="modal-overlay" id="saveModal" onclick="if(event.target===this)closeSaveModal()">
@@ -646,7 +667,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           <input type="text" id="saveOrderName" placeholder="VD: Đơn bà Lan – 15/03/2025">
         </div>
         <div style="background:var(--green-xlight);border-radius:var(--r-sm);padding:10px 13px;font-size:12.5px;color:var(--text-2);border:1.5px solid var(--border-light)">
-          💾 Đơn lưu trong trình duyệt này. Tắt/bật lại vẫn còn.
+          💾 Đơn lưu trong trình duyệt. Tắt/bật lại vẫn còn.
         </div>
         <div>
           <div class="sec-title" style="margin-bottom:10px">Đơn đã lưu</div>
@@ -665,49 +686,18 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 </div>
 
 <script>
-/* ══ STATE ══ */
-let cart = [];          // {sku, name, price, qty, unit, img, promo}
-let currentSKU = null;
-let counter = parseInt(localStorage.getItem('tsp_ctr') || '1');
-let orderId  = makeId();
+/* ══ CONFIG ══ */
+const API_URL = sku => `https://trungson-api.lamhieuthuan.workers.dev/?sku=${encodeURIComponent(sku)}`;
 
-const LOGO_URL = 'https://trungsoncare.com/images/logos/8/logo-trungson.png';
-const API_BASE = 'https://trungson-api.lamhieuthuan.workers.dev/?sku=';
-// Danh sách proxy thử lần lượt
-const PROXIES = [
-  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://cors-anywhere.herokuapp.com/${url}`,
-];
+/* ══ STATE ══ */
+let cart = [];
+let currentSKU = null;
+let counter  = parseInt(localStorage.getItem('tsp_ctr') || '1');
+let orderId  = makeId();
 
 function makeId(){ return '#TSP-' + String(counter).padStart(6,'0'); }
 
-/* ══ SKU SEARCH — thử proxy lần lượt ══ */
-async function fetchWithProxy(apiUrl) {
-  // Thử 1: direct
-  try {
-    const r = await fetch(apiUrl, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) {
-      const j = await r.json();
-      if (j && j.status !== undefined) return j;
-    }
-  } catch(e) {}
-
-  // Thử lần lượt các proxy
-  for (const proxyFn of PROXIES) {
-    try {
-      const r = await fetch(proxyFn(apiUrl), { signal: AbortSignal.timeout(7000) });
-      if (!r.ok) continue;
-      const wrapper = await r.json();
-      // allorigins trả {contents: "..."}
-      const raw = wrapper.contents ?? wrapper;
-      const j = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (j && j.status !== undefined) return j;
-    } catch(e) {}
-  }
-  return null;
-}
-
+/* ══ SKU SEARCH ══ */
 async function searchSKU() {
   const sku = document.getElementById('skuInput').value.trim();
   if (!sku) { toast('Vui lòng nhập mã SKU', 'error'); return; }
@@ -718,21 +708,25 @@ async function searchSKU() {
   document.getElementById('skuResult').classList.remove('show');
   document.getElementById('jsonFallback').classList.remove('show');
 
-  const apiUrl = API_BASE + encodeURIComponent(sku);
-  const json = await fetchWithProxy(apiUrl);
-
-  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Tìm`;
-  btn.disabled = false;
-
-  if (json && json.status && json.data) {
-    showSKUResult(json.data);
-  } else {
-    // Hiện fallback manual
-    document.getElementById('apiLink').href   = apiUrl;
-    document.getElementById('apiLink').textContent = apiUrl;
+  try {
+    const r = await fetch(API_URL(sku), { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    if (j && j.status && j.data) {
+      showSKUResult(j.data);
+    } else {
+      toast('Không tìm thấy SKU: ' + sku, 'error');
+    }
+  } catch(e) {
+    // Hiện fallback paste thủ công
+    const url = `https://trungsoncare.com/?dispatch=api_products.detail&sku=${encodeURIComponent(sku)}`;
+    document.getElementById('apiLink').href = url;
+    document.getElementById('apiLink').textContent = url;
     document.getElementById('jsonPasteArea').value = '';
     document.getElementById('jsonFallback').classList.add('show');
-    toast('Không tự động lấy được — dùng paste JSON thủ công bên dưới', 'info');
+    toast('Lỗi kết nối — thử paste JSON thủ công', 'info');
+  } finally {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Tìm`;
+    btn.disabled = false;
   }
 }
 
@@ -741,11 +735,12 @@ function showSKUResult(d) {
   const unitF = (d.features||[]).find(f => f.name === 'Đơn vị tính');
   const packF = (d.features||[]).find(f => f.name === 'Quy cách');
   const unit  = unitF ? unitF.value : 'Sp';
-  document.getElementById('skuImg').src        = d.images?.[0] ?? '';
+  document.getElementById('skuImg').src = d.images?.[0] ?? '';
   document.getElementById('skuName').textContent = d.name;
   document.getElementById('skuMeta').textContent = 'SKU: ' + d.sku + (packF ? ' · ' + packF.value : '');
-  document.getElementById('skuPrice').textContent = fmt(d.price) + ' ₫ / ' + unit;
+  document.getElementById('skuPriceInput').value = d.price;
   document.getElementById('skuUnit').textContent  = unit;
+  document.getElementById('skuUnit2').textContent = '₫ / ' + unit;
   document.getElementById('addQty').value  = 1;
   document.getElementById('isPromo').checked = false;
   document.getElementById('skuResult').classList.add('show');
@@ -754,40 +749,34 @@ function showSKUResult(d) {
 }
 
 function parseJSON() {
-  const raw = document.getElementById('jsonPasteArea').value.trim();
   try {
-    const j = JSON.parse(raw);
-    if (j.status && j.data) {
-      showSKUResult(j.data);
-    } else {
-      toast('JSON không hợp lệ hoặc sản phẩm không tồn tại', 'error');
-    }
-  } catch(e) {
-    toast('Lỗi parse JSON — kiểm tra lại nội dung paste', 'error');
-  }
+    const j = JSON.parse(document.getElementById('jsonPasteArea').value.trim());
+    if (j.status && j.data) showSKUResult(j.data);
+    else toast('JSON không hợp lệ', 'error');
+  } catch(e) { toast('Lỗi parse JSON', 'error'); }
 }
-
 function hideFallback() {
   document.getElementById('jsonFallback').classList.remove('show');
-  document.getElementById('jsonPasteArea').value = '';
 }
 
 /* ══ ADD TO CART ══ */
 function addToCart() {
   if (!currentSKU) return;
   const d     = currentSKU;
-  const qty   = Math.max(1, parseInt(document.getElementById('addQty').value) || 1);
+  const qty   = Math.max(1, parseInt(document.getElementById('addQty').value)||1);
   const promo = document.getElementById('isPromo').checked;
+  // Lấy giá từ ô editable (có thể đã chỉnh)
+  const price = promo ? 0 : (parseFloat(document.getElementById('skuPriceInput').value) || d.price);
   const unitF = (d.features||[]).find(f => f.name === 'Đơn vị tính');
   const unit  = unitF ? unitF.value : 'Sp';
 
-  const ex = cart.find(p => p.sku === d.sku && p.promo === promo);
+  const ex = cart.find(p => p.sku === d.sku && p.promo === promo && p.price === price);
   if (ex) {
     ex.qty += qty;
-    toast(`Cộng thêm ${qty} ${unit} — ${d.name}`, 'info');
+    toast(`Cộng thêm ${qty} — ${d.name}`, 'info');
   } else {
-    cart.push({ sku: d.sku, name: d.name, price: d.price, qty, unit, img: d.images?.[0] ?? '', promo });
-    toast(promo ? `🎁 Thêm KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
+    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: d.images?.[0] ?? '', promo });
+    toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
   }
   renderPreview();
   document.getElementById('skuResult').classList.remove('show');
@@ -795,21 +784,19 @@ function addToCart() {
   currentSKU = null;
 }
 
-/* Thêm hàng KM thủ công không cần SKU */
 function addManualPromo() {
   const name = document.getElementById('promoName').value.trim();
-  const qty  = Math.max(1, parseInt(document.getElementById('promoQty').value) || 1);
+  const qty  = Math.max(1, parseInt(document.getElementById('promoQty').value)||1);
   const unit = document.getElementById('promoUnit').value.trim() || 'Sp';
-  if (!name) { toast('Nhập tên hàng khuyến mãi', 'error'); return; }
-
-  cart.push({ sku: '', name, price: 0, qty, unit, img: '', promo: true });
-  toast(`🎁 Đã thêm KM: ${name}`, 'success');
+  if (!name) { toast('Nhập tên hàng KM', 'error'); return; }
+  cart.push({ sku:'', name, price:0, qty, unit, img:'', promo:true });
   document.getElementById('promoName').value = '';
   document.getElementById('promoQty').value  = 1;
   renderPreview();
+  toast('🎁 Đã thêm KM: ' + name, 'success');
 }
 
-/* ══ COPY SENDER → RECEIVER ══ */
+/* ══ COPY SENDER ══ */
 function copySender() {
   const n = document.getElementById('senderName').value.trim();
   const p = document.getElementById('senderPhone').value.trim();
@@ -820,177 +807,218 @@ function copySender() {
   toast('Đã copy người đặt → người nhận', 'success');
 }
 
-/* ══ RENDER PREVIEW ══ */
+/* ══ RENDER ══ */
 function renderPreview() {
   const g   = id => document.getElementById(id);
   const val = id => g(id).value;
 
-  g('qcOrderId').textContent  = orderId;
-  g('previewId').textContent  = orderId;
-  g('qcDate').textContent     = 'Ngày lập: ' + fmtDate(new Date());
-  g('qcSenderName').textContent   = val('senderName')   || '—';
-  g('qcSenderPhone').textContent  = val('senderPhone')  || '—';
-  g('qcReceiverName').textContent  = val('receiverName')  || '—';
-  g('qcReceiverPhone').textContent = val('receiverPhone') || '—';
-  g('qcAddress').textContent   = val('address') || '—';
+  g('qcOrderId').textContent = orderId;
+  g('previewId').textContent = orderId;
+  g('qcDate').textContent    = 'Ngày lập: ' + fmtDate(new Date());
+  g('qcSenderName').textContent    = val('senderName')   || '—';
+  g('qcSenderPhone').textContent   = val('senderPhone')  || '—';
+  g('qcReceiverName').textContent  = val('receiverName') || '—';
+  g('qcReceiverPhone').textContent = val('receiverPhone')|| '—';
+  g('qcAddress').textContent  = val('address') || '—';
   const dd = val('deliveryDate');
-  g('qcDelivery').textContent  = dd ? fmtDate(new Date(dd+'T00:00:00')) + ' (Giao tại nhà)' : '—';
-  g('qcPayment').textContent   = val('paymentMethod');
+  g('qcDelivery').textContent = dd ? fmtDate(new Date(dd+'T00:00:00')) + ' (Giao tại nhà)' : '—';
+  g('qcPayment').textContent  = val('paymentMethod');
 
-  /* Table */
+  const BADGE = `<span class="promo-badge">🎁 KM</span>`;
   const tbody = g('qcTbody');
   if (!cart.length) {
     tbody.innerHTML = `<tr class="no-prod-row"><td colspan="6">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
-      Chưa có sản phẩm — nhập SKU bên trái để thêm vào đơn
+      Chưa có sản phẩm — nhập SKU bên trái để thêm
     </td></tr>`;
   } else {
-    const PROMO_BADGE = `<span class="promo-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>KM</span>`;
-    tbody.innerHTML = cart.map((p, i) => `
-      <tr class="${p.promo ? 'promo-row' : ''}">
+    tbody.innerHTML = cart.map((p,i) => `
+      <tr class="${p.promo?'promo-row':''}">
         <td class="qt-stt">${i+1}</td>
         <td><div class="qt-prod">
-          ${p.img ? `<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="">` : ''}
+          ${p.img?`<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="" crossorigin="anonymous">`:''}
           <div>
-            <div class="qt-prod-name">${p.name}${p.promo ? PROMO_BADGE : ''}</div>
-            ${p.sku ? `<div class="qt-prod-sku">SKU: ${p.sku}</div>` : ''}
+            <div class="qt-prod-name">${p.name}${p.promo?BADGE:''}</div>
+            ${p.sku?`<div class="qt-prod-sku">SKU: ${p.sku}</div>`:''}
           </div>
         </div></td>
-        <td class="${p.promo ? 'qt-price free' : 'qt-price'}">${p.promo ? 'Miễn phí' : fmt(p.price) + ' ₫'}</td>
+        <td class="qt-price${p.promo?' free':''}">${p.promo?'Miễn phí':fmt(p.price)+' ₫'}</td>
         <td class="qt-qty-cell">
-          <input class="qt-qty-input" type="number" value="${p.qty}" min="1" onchange="updateQty(${i}, this.value)">
+          <input class="qt-qty-input" type="number" value="${p.qty}" min="1" onchange="updateQty(${i},this.value)">
           <span class="qt-unit">${p.unit}</span>
         </td>
-        <td class="${p.promo ? 'qt-total free-total' : 'qt-total'}">${p.promo ? '0 ₫' : fmt(p.price * p.qty) + ' ₫'}</td>
-        <td><button class="qt-del-btn" onclick="removeItem(${i})" title="Xoá">
+        <td class="qt-total${p.promo?' free-total':''}">${p.promo?'0 ₫':fmt(p.price*p.qty)+' ₫'}</td>
+        <td><button class="qt-del-btn" onclick="removeItem(${i})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button></td>
       </tr>`).join('');
   }
 
-  g('qcProdCount').textContent  = cart.length;
+  g('qcProdCount').textContent   = cart.length;
   g('prodCountChip').textContent = cart.length + ' sản phẩm';
 
-  /* Totals — KM không tính tiền */
-  const sub = cart.reduce((s, p) => s + (p.promo ? 0 : p.price * p.qty), 0);
-  const dd2 = parseFloat(val('discountDirect'))  || 0;
-  const dv  = parseFloat(val('discountVoucher')) || 0;
-  const sf  = parseFloat(val('shipFee'))         || 0;
-  const pr  = parseFloat(val('pointRate'))       || 1;
+  const sub   = cart.reduce((s,p) => s + (p.promo ? 0 : p.price*p.qty), 0);
+  const dd2   = parseFloat(val('discountDirect'))||0;
+  const dv    = parseFloat(val('discountVoucher'))||0;
+  const sf    = parseFloat(val('shipFee'))||0;
+  const pr    = parseFloat(val('pointRate'))||1;
   const total = Math.max(0, sub - dd2 - dv);
   const pts   = Math.floor(total / 1000 * pr);
 
-  g('qcSubtotal').textContent   = fmt(sub) + ' ₫';
-  g('qcDiscDirect').textContent = dd2 > 0 ? '-' + fmt(dd2) + ' ₫' : '0 ₫';
-  g('qcDiscVoucher').textContent= dv  > 0 ? '-' + fmt(dv)  + ' ₫' : '0 ₫';
-  g('qcTotal').textContent      = fmt(total) + ' ₫';
-  g('qcPoints').textContent     = '+ ' + fmt(pts) + ' điểm';
+  g('qcSubtotal').textContent    = fmt(sub) + ' ₫';
+  g('qcDiscDirect').textContent  = dd2 > 0 ? '-' + fmt(dd2) + ' ₫' : '0 ₫';
+  g('qcDiscVoucher').textContent = dv  > 0 ? '-' + fmt(dv)  + ' ₫' : '0 ₫';
+  g('qcTotal').textContent       = fmt(total) + ' ₫';
+  g('qcPoints').textContent      = '+ ' + fmt(pts) + ' điểm';
 
-  /* Phí ship tham khảo — hiện riêng bên dưới thành tiền */
   const shipRow = g('qcShipRefRow');
-  if (sf > 0) {
-    shipRow.style.display = 'flex';
-    g('qcShipRef').textContent = '~' + fmt(sf) + ' ₫';
-  } else {
-    shipRow.style.display = 'none';
-  }
+  if (sf > 0) { shipRow.style.display='flex'; g('qcShipRef').textContent='~'+fmt(sf)+' ₫'; }
+  else          shipRow.style.display='none';
 
-  /* Ghi chú */
   const note = val('orderNote').trim();
   g('qcNoteWrap').style.display = note ? 'block' : 'none';
   if (note) g('qcNoteText').textContent = note;
 }
 
-function updateQty(i, v)  { cart[i].qty = Math.max(1, parseInt(v)||1); renderPreview(); }
-function removeItem(i)    { const n=cart[i].name; cart.splice(i,1); renderPreview(); toast('Đã xoá: '+n, 'info'); }
-function clearCart()      { if(!cart.length) return; if(!confirm('Xoá toàn bộ sản phẩm?')) return; cart=[]; renderPreview(); toast('Đã xoá đơn','info'); }
+function updateQty(i,v){ cart[i].qty=Math.max(1,parseInt(v)||1); renderPreview(); }
+function removeItem(i){ const n=cart[i].name; cart.splice(i,1); renderPreview(); toast('Đã xoá: '+n,'info'); }
+function clearCart(){ if(!cart.length)return; if(!confirm('Xoá toàn bộ?'))return; cart=[]; renderPreview(); toast('Đã xoá đơn','info'); }
 
-function newOrder() {
-  if (cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?')) return;
-  cart = []; counter++; localStorage.setItem('tsp_ctr', counter); orderId = makeId();
+function newOrder(){
+  if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
+  cart=[];counter++;localStorage.setItem('tsp_ctr',counter);orderId=makeId();
   ['senderName','senderPhone','receiverName','receiverPhone','address','deliveryDate','orderNote']
-    .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('discountDirect').value  = 0;
-  document.getElementById('discountVoucher').value = 0;
-  document.getElementById('shipFee').value = 0;
+    .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('discountDirect').value=0;
+  document.getElementById('discountVoucher').value=0;
+  document.getElementById('shipFee').value=0;
   document.getElementById('skuResult').classList.remove('show');
   document.getElementById('jsonFallback').classList.remove('show');
-  renderPreview();
-  toast('Đã tạo đơn mới ' + orderId, 'success');
+  renderPreview(); toast('Đơn mới: '+orderId,'success');
+}
+
+/* ══ EXPORT IMAGE ══ */
+async function exportImage(mode) {
+  if (!cart.length) { toast('Chưa có sản phẩm trong đơn','error'); return; }
+  const overlay = document.getElementById('exportOverlay');
+  const msg     = document.getElementById('exportMsg');
+  overlay.classList.add('open');
+  msg.textContent = mode==='clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+
+  // Ẩn nút xoá trong bảng trước khi chụp
+  document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='0');
+
+  try {
+    await new Promise(r=>setTimeout(r,100)); // cho DOM update
+    const card = document.getElementById('quoteCard');
+    const canvas = await html2canvas(card, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    if (mode === 'download') {
+      const link = document.createElement('a');
+      link.download = `baogía-${orderId.replace('#','')}-${Date.now()}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.92);
+      link.click();
+      toast('Đã tải xuống ảnh JPG ✅', 'success');
+    } else {
+      // Copy to clipboard
+      canvas.toBlob(async blob => {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          toast('Đã copy ảnh vào clipboard — paste vào chat ngay! ✅', 'success');
+        } catch(e) {
+          // Fallback: download nếu clipboard bị chặn
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `baogía-${orderId.replace('#','')}.png`; a.click();
+          toast('Clipboard bị chặn — đã tải xuống thay thế', 'info');
+        }
+        overlay.classList.remove('open');
+      }, 'image/png');
+      return; // early return vì blob callback xử lý overlay
+    }
+  } catch(e) {
+    toast('Lỗi xuất ảnh: ' + e.message, 'error');
+  }
+  document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+  overlay.classList.remove('open');
 }
 
 /* ══ SAVE / LOAD ══ */
-function getSaved() { try{ return JSON.parse(localStorage.getItem('tsp_orders')||'[]'); }catch{ return []; } }
-function setSaved(l){ localStorage.setItem('tsp_orders', JSON.stringify(l)); }
+function getSaved(){ try{return JSON.parse(localStorage.getItem('tsp_orders')||'[]');}catch{return[];} }
+function setSaved(l){ localStorage.setItem('tsp_orders',JSON.stringify(l)); }
 
-function getSnapshot() {
-  const v   = id => document.getElementById(id).value;
-  const sub = cart.reduce((s,p) => s + (p.promo ? 0 : p.price*p.qty), 0);
-  const dd  = parseFloat(v('discountDirect'))||0;
-  const dv  = parseFloat(v('discountVoucher'))||0;
-  const sf  = parseFloat(v('shipFee'))||0;
+function getSnapshot(){
+  const v  = id=>document.getElementById(id).value;
+  const sub= cart.reduce((s,p)=>s+(p.promo?0:p.price*p.qty),0);
+  const dd = parseFloat(v('discountDirect'))||0;
+  const dv = parseFloat(v('discountVoucher'))||0;
+  const sf = parseFloat(v('shipFee'))||0;
   return {
-    id: orderId, savedAt: new Date().toISOString(),
-    total: Math.max(0, sub-dd-dv),
-    cart: JSON.parse(JSON.stringify(cart)),
-    form: {
-      senderName:v('senderName'), senderPhone:v('senderPhone'),
-      receiverName:v('receiverName'), receiverPhone:v('receiverPhone'),
-      address:v('address'), deliveryDate:v('deliveryDate'),
+    id:orderId, savedAt:new Date().toISOString(),
+    total:Math.max(0,sub-dd-dv),
+    cart:JSON.parse(JSON.stringify(cart)),
+    form:{
+      senderName:v('senderName'),senderPhone:v('senderPhone'),
+      receiverName:v('receiverName'),receiverPhone:v('receiverPhone'),
+      address:v('address'),deliveryDate:v('deliveryDate'),
       paymentMethod:v('paymentMethod'),
-      discountDirect:dd, discountVoucher:dv, shipFee:sf,
+      discountDirect:dd,discountVoucher:dv,shipFee:sf,
       pointRate:parseFloat(v('pointRate'))||1,
       orderNote:v('orderNote')
     }
   };
 }
 
-function saveCurrentOrder() {
-  const snap = getSnapshot();
-  snap.name  = snap.form.receiverName
-    ? `Đơn ${snap.form.receiverName} – ${fmtDate(new Date())}`
-    : `${snap.id} – ${fmtDate(new Date())}`;
-  const list = getSaved(); const idx = list.findIndex(o => o.id===orderId);
-  if (idx>=0) list[idx]=snap; else list.unshift(snap);
-  setSaved(list); refreshSavedUI(); toast('Đã lưu: '+snap.name, 'success');
+function saveCurrentOrder(){
+  const snap=getSnapshot();
+  snap.name=snap.form.receiverName?`Đơn ${snap.form.receiverName} – ${fmtDate(new Date())}`:`${snap.id} – ${fmtDate(new Date())}`;
+  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  if(idx>=0)list[idx]=snap;else list.unshift(snap);
+  setSaved(list);refreshSavedUI();toast('Đã lưu: '+snap.name,'success');
 }
 
-function saveOrder() {
-  const snap = getSnapshot();
-  snap.name = document.getElementById('saveOrderName').value.trim()
-    || (snap.form.receiverName ? `Đơn ${snap.form.receiverName}` : snap.id);
-  const list = getSaved(); const idx = list.findIndex(o => o.id===orderId);
-  if (idx>=0) list[idx]=snap; else list.unshift(snap);
-  setSaved(list); refreshSavedUI(); renderSavedModal(); toast('Đã lưu: '+snap.name, 'success');
+function saveOrder(){
+  const snap=getSnapshot();
+  snap.name=document.getElementById('saveOrderName').value.trim()||(snap.form.receiverName?`Đơn ${snap.form.receiverName}`:snap.id);
+  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  if(idx>=0)list[idx]=snap;else list.unshift(snap);
+  setSaved(list);refreshSavedUI();renderSavedModal();toast('Đã lưu: '+snap.name,'success');
 }
 
-function loadOrder(o) {
-  cart = JSON.parse(JSON.stringify(o.cart)); orderId = o.id;
-  const f   = o.form;
-  const set = (id,v) => { const el=document.getElementById(id); if(el) el.value=v||''; };
-  set('senderName',f.senderName); set('senderPhone',f.senderPhone);
-  set('receiverName',f.receiverName); set('receiverPhone',f.receiverPhone);
-  set('address',f.address); set('deliveryDate',f.deliveryDate);
-  document.getElementById('paymentMethod').value = f.paymentMethod || 'Tiền mặt khi nhận';
-  set('discountDirect',f.discountDirect||0); set('discountVoucher',f.discountVoucher||0);
-  set('shipFee',f.shipFee||0); set('pointRate',f.pointRate||1);
+function loadOrder(o){
+  cart=JSON.parse(JSON.stringify(o.cart));orderId=o.id;
+  const f=o.form;
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  set('senderName',f.senderName);set('senderPhone',f.senderPhone);
+  set('receiverName',f.receiverName);set('receiverPhone',f.receiverPhone);
+  set('address',f.address);set('deliveryDate',f.deliveryDate);
+  document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt khi nhận';
+  set('discountDirect',f.discountDirect||0);set('discountVoucher',f.discountVoucher||0);
+  set('shipFee',f.shipFee||0);set('pointRate',f.pointRate||1);
   set('orderNote',f.orderNote);
-  renderPreview(); closeSaveModal(); toast('Đã tải đơn: '+o.name, 'success');
+  renderPreview();closeSaveModal();toast('Đã tải đơn: '+o.name,'success');
 }
 
-function deleteOrder(id, e) {
-  e.stopPropagation();
-  if (!confirm('Xoá đơn này?')) return;
-  setSaved(getSaved().filter(o => o.id!==id));
-  refreshSavedUI(); renderSavedModal(); toast('Đã xoá đơn','info');
+function deleteOrder(id,e){
+  e.stopPropagation();if(!confirm('Xoá đơn này?'))return;
+  setSaved(getSaved().filter(o=>o.id!==id));
+  refreshSavedUI();renderSavedModal();toast('Đã xoá','info');
 }
 
-function refreshSavedUI() {
-  const list = getSaved();
-  document.getElementById('savedCount').textContent = list.length;
-  const el = document.getElementById('savedListSidebar');
-  if (!list.length) { el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>'; return; }
-  el.innerHTML = list.slice(0,5).map(o=>`
+function refreshSavedUI(){
+  const list=getSaved();
+  document.getElementById('savedCount').textContent=list.length;
+  const el=document.getElementById('savedListSidebar');
+  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
+  el.innerHTML=list.slice(0,5).map(o=>`
     <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
       <div class="saved-item-info">
         <div class="saved-name">${o.name}</div>
@@ -1002,11 +1030,10 @@ function refreshSavedUI() {
     </div>`).join('');
 }
 
-function renderSavedModal() {
-  const list = getSaved();
-  const el   = document.getElementById('savedListModal');
-  if (!list.length) { el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>'; return; }
-  el.innerHTML = list.map(o=>`
+function renderSavedModal(){
+  const list=getSaved();const el=document.getElementById('savedListModal');
+  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
+  el.innerHTML=list.map(o=>`
     <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
       <div class="saved-item-info">
         <div class="saved-name">${o.name}</div>
@@ -1018,41 +1045,35 @@ function renderSavedModal() {
     </div>`).join('');
 }
 
-function openSaveModal() {
-  const rec = document.getElementById('receiverName').value;
-  document.getElementById('saveOrderName').value = rec
-    ? `Đơn ${rec} – ${fmtDate(new Date())}`
-    : `${orderId} – ${fmtDate(new Date())}`;
+function openSaveModal(){
+  const rec=document.getElementById('receiverName').value;
+  document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:` ${orderId} – ${fmtDate(new Date())}`;
   renderSavedModal();
   document.getElementById('saveModal').classList.add('open');
 }
-function closeSaveModal() { document.getElementById('saveModal').classList.remove('open'); }
+function closeSaveModal(){ document.getElementById('saveModal').classList.remove('open'); }
 
 /* ══ PRINT ══ */
-function printQuote() {
-  if (!cart.length) { toast('Chưa có sản phẩm trong đơn','error'); return; }
-  window.print();
-}
+function printQuote(){ if(!cart.length){toast('Chưa có sản phẩm','error');return;} window.print(); }
 
 /* ══ UTILS ══ */
-function fmt(n)    { return Math.round(n).toLocaleString('vi-VN'); }
+function fmt(n){ return Math.round(n).toLocaleString('vi-VN'); }
 function fmtDate(d){ return d.toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'}); }
-
-function toast(msg, type='info') {
-  const icons = {
+function toast(msg,type='info'){
+  const icons={
     success:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-    error:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
-    info:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
+    error:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+    info:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`
   };
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.innerHTML = icons[type] + msg;
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  t.innerHTML=icons[type]+msg;
   document.getElementById('toastWrap').appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(()=>t.remove(),3500);
 }
 
 /* ══ INIT ══ */
-document.getElementById('deliveryDate').value = new Date(Date.now()+2*86400000).toISOString().split('T')[0];
+document.getElementById('deliveryDate').value=new Date(Date.now()+2*86400000).toISOString().split('T')[0];
 renderPreview();
 refreshSavedUI();
 </script>
