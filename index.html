@@ -672,7 +672,7 @@ let counter = parseInt(localStorage.getItem('tsp_ctr') || '1');
 let orderId  = makeId();
 
 const LOGO_URL = 'https://trungsoncare.com/images/logos/8/logo-trungson.png';
-const API_BASE = 'https://trungsoncare.com/?dispatch=api_products.detail&sku=';
+const API_BASE = 'https://trungson-api.lamhieuthuan.workers.dev/?sku=';
 // Danh sách proxy thử lần lượt
 const PROXIES = [
   url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
