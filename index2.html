@@ -152,11 +152,6 @@ textarea{resize:none;min-height:54px}
 /* Header: full-width banner logo style */
 .qc-header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);padding:0;display:flex;align-items:stretch;color:#fff;min-height:80px;overflow:visible}
 .qc-header-body{flex:1;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;overflow:visible}
-.qc-header-logo{padding:10px 20px;display:flex;align-items:center;background:rgba(0,0,0,.12);border-right:1px solid rgba(255,255,255,.15);flex-shrink:0}
-.qc-header-logo img{height:52px;width:auto;object-fit:contain;display:block}
-.qc-header-body{flex:1;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
-.qc-brand-name{font-weight:800;font-size:20px;letter-spacing:.3px;line-height:1.1}
-.qc-brand-slogan{font-size:11px;opacity:.72;font-weight:500;margin-top:3px;letter-spacing:.3px}
 .qc-header-right{text-align:right;flex-shrink:0}
 .qc-doc-title{font-size:10px;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:1.2px}
 .qc-doc-id{font-family:var(--mono);font-size:16px;font-weight:700;margin-top:3px}
@@ -897,7 +892,7 @@ async function addToCart() {
     if (rawImg) {
       try { imgB64 = await imgToBase64(rawImg); } catch { imgB64 = rawImg; }
     }
-    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: imgB64 || rawImg, promo });
+    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: imgB64 || rawImg, _rawImg: rawImg, promo });
     toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
   }
   renderPreview();
@@ -932,7 +927,7 @@ function copySender() {
 /* ══ RENDER ══ */
 function renderPreview() {
   const g   = id => document.getElementById(id);
-  const val = id => g(id).value;
+  const val = id => { const el=g(id); return el ? el.value : ''; }; // Fix 7: null-safe
 
   g('qcOrderId').textContent = orderId;
   g('previewId').textContent = orderId;
@@ -1022,8 +1017,10 @@ function clearCart(){ if(!cart.length)return; if(!confirm('Xoá toàn bộ?'))re
 function newOrder(){
   if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
   cart=[];counter++;localStorage.setItem('tsp_ctr',counter);orderId=makeId();
-  ['senderName','senderPhone','receiverName','receiverPhone','address','deliveryDate','orderNote']
+  ['senderName','senderPhone','receiverName','receiverPhone','address','orderNote']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Fix 8: reset về +2 ngày, không để trống
+  document.getElementById('deliveryDate').value=new Date(Date.now()+2*86400000).toISOString().split('T')[0];
   document.getElementById('discountDirect').value=0;
   document.getElementById('discountVoucher').value=0;
   document.getElementById('shipFee').value=0;
@@ -1085,10 +1082,11 @@ async function exportImage(mode) {
   try {
     msg.textContent = 'Đang xử lý ảnh...';
     const b64s = await Promise.all(origSrcs.map(src => {
-      if (!src || src.startsWith('data:')) return Promise.resolve(src); // đã base64, skip
-      return imgToBase64(src).catch(() => src);
+      if (!src || src.startsWith('data:')) return Promise.resolve(src);
+      return imgToBase64(src).catch(() => null);
     }));
-    imgs.forEach((img, i) => { if (b64s[i] && b64s[i] !== img.src) img.src = b64s[i]; });
+    // Fix 10: chỉ swap nếu b64 hợp lệ, không set null vào src
+    imgs.forEach((img, i) => { if (b64s[i] && b64s[i].startsWith('data:')) img.src = b64s[i]; });
 
     await new Promise(r => setTimeout(r, 150));
     msg.textContent = mode === 'clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
@@ -1140,15 +1138,22 @@ function getSaved(){ try{return JSON.parse(localStorage.getItem('tsp_orders')||'
 function setSaved(l){ localStorage.setItem('tsp_orders',JSON.stringify(l)); }
 
 function getSnapshot(){
-  const v  = id=>document.getElementById(id).value;
+  const v  = id => { const el=document.getElementById(id); return el ? el.value : ''; };
   const sub= cart.reduce((s,p)=>s+(p.promo?0:p.price*p.qty),0);
   const dd = parseFloat(v('discountDirect'))||0;
   const dv = parseFloat(v('discountVoucher'))||0;
   const sf = parseFloat(v('shipFee'))||0;
+  // Strip base64 img khi lưu để tránh vượt quota localStorage 5MB
+  // Chỉ lưu URL gốc (nếu có), restore lại khi load
+  const cartToSave = cart.map(p => ({
+    ...p,
+    img: p.img && p.img.startsWith('data:') ? (p._rawImg || '') : p.img
+  }));
   return {
     id:orderId, savedAt:new Date().toISOString(),
     total:Math.max(0,sub-dd-dv),
-    cart:JSON.parse(JSON.stringify(cart)),
+    selectedNotice,
+    cart: cartToSave,
     form:{
       senderName:v('senderName'),senderPhone:v('senderPhone'),
       receiverName:v('receiverName'),receiverPhone:v('receiverPhone'),
@@ -1161,24 +1166,35 @@ function getSnapshot(){
   };
 }
 
+// Lưu order index trong window để tránh JSON.stringify trong onclick (fix lỗi tên có dấu nháy)
+window._savedOrders = [];
+
 function saveCurrentOrder(){
   const snap=getSnapshot();
-  snap.name=snap.form.receiverName?`Đơn ${snap.form.receiverName} – ${fmtDate(new Date())}`:`${snap.id} – ${fmtDate(new Date())}`;
-  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  const rec=snap.form.receiverName;
+  snap.name=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:`${snap.id} – ${fmtDate(new Date())}`;
+  const list=getSaved(); const idx=list.findIndex(o=>o.id===orderId);
   if(idx>=0)list[idx]=snap;else list.unshift(snap);
   setSaved(list);refreshSavedUI();toast('Đã lưu: '+snap.name,'success');
 }
 
 function saveOrder(){
   const snap=getSnapshot();
-  snap.name=document.getElementById('saveOrderName').value.trim()||(snap.form.receiverName?`Đơn ${snap.form.receiverName}`:snap.id);
-  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  const nameInput=document.getElementById('saveOrderName').value.trim();
+  const rec=snap.form.receiverName;
+  snap.name=nameInput||(rec?`Đơn ${rec}`:snap.id);
+  const list=getSaved(); const idx=list.findIndex(o=>o.id===orderId);
   if(idx>=0)list[idx]=snap;else list.unshift(snap);
   setSaved(list);refreshSavedUI();renderSavedModal();toast('Đã lưu: '+snap.name,'success');
 }
 
-function loadOrder(o){
-  cart=JSON.parse(JSON.stringify(o.cart));orderId=o.id;
+function loadOrder(idx){
+  const o = window._savedOrders[idx];
+  if (!o) return;
+  cart=JSON.parse(JSON.stringify(o.cart)); orderId=o.id;
+  // Restore selectedNotice
+  selectedNotice = o.selectedNotice ?? 0;
+  NOTICES.forEach((_,i)=>{ const p=document.getElementById('noticePill'+i); if(p) p.classList.toggle('active',i===selectedNotice); });
   const f=o.form;
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   set('senderName',f.senderName);set('senderPhone',f.senderPhone);
@@ -1191,47 +1207,45 @@ function loadOrder(o){
   renderPreview();closeSaveModal();toast('Đã tải đơn: '+o.name,'success');
 }
 
-function deleteOrder(id,e){
-  e.stopPropagation();if(!confirm('Xoá đơn này?'))return;
-  setSaved(getSaved().filter(o=>o.id!==id));
+function deleteOrder(idx,e){
+  e.stopPropagation();
+  const o = window._savedOrders[idx];
+  if(!o || !confirm('Xoá đơn này?')) return;
+  setSaved(getSaved().filter(s=>s.id!==o.id));
   refreshSavedUI();renderSavedModal();toast('Đã xoá','info');
+}
+
+function _renderSavedList(list, elId, maxItems){
+  window._savedOrders = list; // index-based reference, safe with any characters in name
+  const el=document.getElementById(elId);
+  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
+  const items = maxItems ? list.slice(0,maxItems) : list;
+  el.innerHTML=items.map((o,i)=>`
+    <div class="saved-item" onclick="loadOrder(${i})">
+      <div class="saved-item-info">
+        <div class="saved-name">${o.name.replace(/</g,'&lt;')}</div>
+        <div class="saved-meta">${o.id} · ${o.savedAt?fmtDate(new Date(o.savedAt)):''} · ${fmt(o.total)} ₫</div>
+      </div>
+      <button class="saved-del" onclick="deleteOrder(${i},event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>`).join('');
 }
 
 function refreshSavedUI(){
   const list=getSaved();
   document.getElementById('savedCount').textContent=list.length;
-  const el=document.getElementById('savedListSidebar');
-  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
-  el.innerHTML=list.slice(0,5).map(o=>`
-    <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
-      <div class="saved-item-info">
-        <div class="saved-name">${o.name}</div>
-        <div class="saved-meta">${o.id} · ${fmt(o.total)} ₫</div>
-      </div>
-      <button class="saved-del" onclick="deleteOrder('${o.id}',event)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-      </button>
-    </div>`).join('');
+  _renderSavedList(list,'savedListSidebar',5);
 }
 
 function renderSavedModal(){
-  const list=getSaved();const el=document.getElementById('savedListModal');
-  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
-  el.innerHTML=list.map(o=>`
-    <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
-      <div class="saved-item-info">
-        <div class="saved-name">${o.name}</div>
-        <div class="saved-meta">${o.id} · ${fmtDate(new Date(o.savedAt))} · ${fmt(o.total)} ₫</div>
-      </div>
-      <button class="saved-del" onclick="deleteOrder('${o.id}',event)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-      </button>
-    </div>`).join('');
+  _renderSavedList(getSaved(),'savedListModal',0);
 }
 
 function openSaveModal(){
-  const rec=document.getElementById('receiverName').value;
-  document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:` ${orderId} – ${fmtDate(new Date())}`;
+  const rec=document.getElementById('receiverName').value.trim();
+  // Fix 6: bỏ leading space
+  document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:orderId+' – '+fmtDate(new Date());
   renderSavedModal();
   document.getElementById('saveModal').classList.add('open');
 }
