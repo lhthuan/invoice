@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lập Báo Giá — Trung Sơn Pharma</title>
+<title>Lập Báo Giá 12h11 — Trung Sơn Pharma</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- html2canvas for image export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -872,7 +872,7 @@ function hideFallback() {
 }
 
 /* ══ ADD TO CART ══ */
-async function addToCart() {
+function addToCart() {
   if (!currentSKU) return;
   const d     = currentSKU;
   const qty   = Math.max(1, parseInt(document.getElementById('addQty').value)||1);
@@ -886,14 +886,19 @@ async function addToCart() {
     ex.qty += qty;
     toast(`Cộng thêm ${qty} — ${d.name}`, 'info');
   } else {
-    // Convert ảnh sang base64 ngay lúc add để export không bị tainted
     const rawImg = d.images?.[0] ?? '';
-    let imgB64 = '';
-    if (rawImg) {
-      try { imgB64 = await imgToBase64(rawImg); } catch { imgB64 = rawImg; }
-    }
-    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: imgB64 || rawImg, _rawImg: rawImg, promo });
+    // Thêm vào cart ngay với URL gốc để hiển thị nhanh
+    const item = { sku: d.sku, name: d.name, price, qty, unit, img: rawImg, _rawImg: rawImg, promo };
+    cart.push(item);
     toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
+    // Convert sang base64 trong nền để export không bị tainted
+    if (rawImg) {
+      imgToBase64(rawImg).then(b64 => {
+        if (b64 && b64.startsWith('data:')) {
+          item.img = b64; // cập nhật item trong cart (reference)
+        }
+      }).catch(() => {});
+    }
   }
   renderPreview();
   document.getElementById('skuResult').classList.remove('show');
@@ -1034,35 +1039,61 @@ function newOrder(){
 
 /* ══ EXPORT IMAGE ══ */
 
-// Fetch bất kỳ URL ảnh → base64 data URI qua Cloudflare Worker
+// Fetch bất kỳ URL ảnh → base64 data URI
+// Thử 3 cách theo thứ tự: Worker proxy → fetch cors → Image+Canvas
 async function imgToBase64(url) {
-  if (!url) return null;
+  if (!url || url.startsWith('data:')) return url;
+
+  // Cách 1: Worker proxy (cần Worker đã update hỗ trợ ?imgurl=)
   try {
-    // Dùng worker proxy để bypass CORS — thêm param &type=img
     const proxyUrl = `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
-    const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error('fetch failed');
-    const blob = await r.blob();
-    return await new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload  = () => res(fr.result);
-      fr.onerror = rej;
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    // Fallback: thử fetch trực tiếp (đôi khi được nếu server cho phép)
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(5000), mode: 'cors' });
-      if (!r.ok) throw new Error();
+    const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
       const blob = await r.blob();
-      return await new Promise((res, rej) => {
-        const fr = new FileReader();
-        fr.onload  = () => res(fr.result);
-        fr.onerror = rej;
-        fr.readAsDataURL(blob);
-      });
-    } catch { return null; }
-  }
+      if (blob.size > 0) return await blobToB64(blob);
+    }
+  } catch {}
+
+  // Cách 2: fetch trực tiếp với CORS
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(5000), mode: 'cors' });
+    if (r.ok) {
+      const blob = await r.blob();
+      if (blob.size > 0) return await blobToB64(blob);
+    }
+  } catch {}
+
+  // Cách 3: Image element + offscreen Canvas (không cần CORS header)
+  return await imgViaCanvas(url);
+}
+
+function blobToB64(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload  = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
+
+function imgViaCanvas(url) {
+  return new Promise((res) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        res(c.toDataURL('image/jpeg', 0.9));
+      } catch { res(null); } // tainted canvas — không làm được gì
+    };
+    img.onerror = () => res(null);
+    // Thêm cache-busting nhỏ để tránh cached response không có CORS header
+    img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+    // Timeout 8s
+    setTimeout(() => res(null), 8000);
+  });
 }
 
 async function exportImage(mode) {
@@ -1081,6 +1112,8 @@ async function exportImage(mode) {
 
   try {
     msg.textContent = 'Đang xử lý ảnh...';
+    // Đợi background base64 conversion trong cart có thể đã xong
+    await new Promise(r => setTimeout(r, 300));
     const b64s = await Promise.all(origSrcs.map(src => {
       if (!src || src.startsWith('data:')) return Promise.resolve(src);
       return imgToBase64(src).catch(() => null);
