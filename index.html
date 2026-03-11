@@ -11,6 +11,8 @@
 :root{
   --green:#0a6e4f;--green-dark:#064d37;--green-mid:#12a374;
   --green-light:#e6f4ef;--green-xlight:#f0faf6;
+  --orange:#e85d04;--orange-dark:#c04b00;--orange-mid:#f48c06;
+  --orange-light:#fff0e0;--orange-xlight:#fff7f0;
   --amber:#d97706;--amber-light:#fef3c7;
   --red:#dc2626;--red-light:#fee2e2;
   --pink:#db2777;--pink-light:#fce7f3;
@@ -144,15 +146,12 @@ textarea{resize:none;min-height:54px}
 .chip{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;background:var(--green-light);color:var(--green)}
 
 /* ══ QUOTE CARD ══ */
-.quote-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:hidden;max-width:720px;margin:0 auto}
+.quote-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-md);overflow:visible;max-width:720px;margin:0 auto}
+.quote-card-inner{background:#fff;border-radius:var(--r-lg);overflow:hidden}
 
 /* Header: full-width banner logo style */
-.qc-header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);padding:0;display:flex;align-items:stretch;color:#fff;min-height:72px}
-.qc-header-logo{padding:10px 20px;display:flex;align-items:center;background:rgba(0,0,0,.12);border-right:1px solid rgba(255,255,255,.15);flex-shrink:0}
-.qc-header-logo img{height:52px;width:auto;object-fit:contain;display:block}
-.qc-header-body{flex:1;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
-.qc-brand-name{font-weight:800;font-size:20px;letter-spacing:.3px;line-height:1.1}
-.qc-brand-slogan{font-size:11px;opacity:.72;font-weight:500;margin-top:3px;letter-spacing:.3px}
+.qc-header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);padding:0;display:flex;align-items:stretch;color:#fff;min-height:80px;overflow:visible}
+.qc-header-body{flex:1;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;overflow:visible}
 .qc-header-right{text-align:right;flex-shrink:0}
 .qc-doc-title{font-size:10px;font-weight:700;opacity:.75;text-transform:uppercase;letter-spacing:1.2px}
 .qc-doc-id{font-family:var(--mono);font-size:16px;font-weight:700;margin-top:3px}
@@ -183,8 +182,10 @@ table.qt tr:last-child td{border-bottom:none}
 table.qt tbody tr:hover td{background:var(--green-xlight)}
 table.qt tbody tr.promo-row td{background:#fdf4ff}
 table.qt tbody tr.promo-row:hover td{background:#fae8ff}
-.qt-prod{display:flex;align-items:center;gap:10px}
-.qt-img{width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0}
+.qt-prod{display:flex;align-items:center;gap:12px}
+.qt-img{width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--border-light);background:#f0f0f0;flex-shrink:0;box-shadow:var(--shadow-sm)}
+.qt-img-placeholder{width:56px;height:56px;border-radius:8px;background:var(--surface-3);flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-light)}
+.qt-img-placeholder svg{width:22px;height:22px;opacity:.25}
 .qt-prod-name{font-weight:600;font-size:12.5px;line-height:1.3}
 .qt-prod-sku{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:2px}
 .qt-stt{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:600;width:28px}
@@ -209,7 +210,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .sum-label{color:var(--text-2)}
 .sum-val{font-family:var(--mono);font-size:13px;color:var(--text-2)}
 .sum-val.neg{color:var(--red);font-weight:700}
-.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;background:var(--green);border-radius:var(--r-sm);color:#fff;margin-top:4px}
+.sum-total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);border-radius:var(--r-sm);color:#fff;margin-top:4px;box-shadow:0 4px 14px rgba(232,93,4,.3)}
 .sum-total-label{font-weight:700;font-size:14px}
 .sum-total-val{font-family:var(--mono);font-size:21px;font-weight:800}
 .sum-ship-ref{display:flex;justify-content:space-between;align-items:flex-start;padding:8px 14px;background:var(--amber-light);border-radius:var(--r-sm);margin-top:8px;border:1px dashed #f59e0b;gap:12px}
@@ -221,13 +222,15 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .qc-footer{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border-light)}
 .qcf-cell{padding:11px 22px;display:flex;align-items:center;gap:9px;font-size:12.5px}
 .qcf-cell:first-child{border-right:1px solid var(--border-light)}
-.qcf-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.qcf-icon svg{width:14px;height:14px}
-.qcf-icon.pt{background:var(--amber-light);color:var(--amber)}
+.qcf-cell.care-pt{background:linear-gradient(135deg,var(--orange-xlight) 0%,#fff8f0 100%)}
+.qcf-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.qcf-icon svg{width:15px;height:15px}
+.qcf-icon.pt{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;box-shadow:0 2px 8px rgba(232,93,4,.3)}
 .qcf-icon.pm{background:var(--blue-light);color:var(--blue)}
 .qcf-lbl{font-size:10px;color:var(--text-3);margin-bottom:2px}
 .qcf-val{font-weight:700;font-size:13px}
-.qcf-val.pt-val{color:var(--amber);font-family:var(--mono)}
+.qcf-val.pt-val{color:var(--orange);font-family:var(--mono);font-size:15px}
+.care-pt-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:9.5px;font-weight:800;background:var(--orange);color:#fff;text-transform:uppercase;letter-spacing:.5px;margin-left:4px;vertical-align:middle}
 .qc-note{padding:9px 22px 13px;border-top:1px solid var(--border-light)}
 .qc-note-text{font-size:12px;color:var(--text-2);font-style:italic;background:var(--amber-light);border-left:3px solid var(--amber);padding:8px 11px;border-radius:0 6px 6px 0}
 
@@ -260,6 +263,20 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .export-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
 .export-overlay.open{display:flex}
 .export-overlay p{color:#fff;font-weight:600;font-size:14px}
+
+/* ══ THANK YOU FOOTER ══ */
+.qc-thankyou{padding:12px 22px 0;text-align:center}
+.qc-thankyou-title{font-size:14px;font-weight:800;color:var(--orange);margin-bottom:4px}
+.qc-thankyou-sub{font-size:11.5px;color:var(--text-2);line-height:1.5;max-width:480px;margin:0 auto 10px}
+.qc-thankyou-sub strong{color:var(--text)}
+.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 8px}
+.qc-contact-row{display:flex;justify-content:center}
+.qc-contact-cell{display:flex;align-items:center;gap:7px;padding:6px 18px;border-right:1px solid var(--border-light)}
+.qc-contact-cell:last-child{border-right:none}
+.qc-contact-lbl{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap}
+.qc-contact-val{font-size:13px;font-weight:800;color:var(--orange);font-family:var(--mono);white-space:nowrap}
+.qc-contact-val.website{font-family:var(--font);font-size:12px;font-weight:700}
+.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:7px 22px;text-align:center;font-size:11px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ══ NOTICE BLOCK in quote card ══ */
 .qc-notice{border-top:1px solid var(--border-light);padding:10px 22px 14px}
@@ -373,11 +390,11 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="field">
               <div class="field-label">Thanh toán</div>
               <select id="paymentMethod" onchange="renderPreview()">
-                <option>Tiền mặt khi nhận</option>
+                <option>Tiền mặt</option>
                 <option>Chuyển khoản</option>
-                <option>Ví MoMo</option>
-                <option>ZaloPay</option>
-                <option>VNPay</option>
+                <option>QR Pay</option>
+                <option>Quẹt thẻ</option>
+                <option>Thu hộ (COD)</option>
               </select>
             </div>
           </div>
@@ -423,13 +440,17 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
                 <input type="number" class="sku-price-input" id="skuPriceInput" min="0" step="500">
                 <span class="sku-price-unit" id="skuUnit2">₫ / Sp</span>
               </div>
+              <!-- Editable unit -->
+              <div class="sku-price-row" style="margin-top:5px">
+                <span class="sku-price-label">Đơn vị:</span>
+                <input type="text" id="skuUnitInput" style="width:110px;font-size:12.5px;font-weight:600;padding:3px 7px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--font)" placeholder="Hộp, Chai, Viên...">
+              </div>
             </div>
           </div>
           <div class="sku-add-row">
             <div class="qty-ctrl">
               <span>SL:</span>
               <input type="number" id="addQty" value="1" min="1">
-              <span id="skuUnit" style="font-size:11px;color:var(--text-3)">Sp</span>
             </div>
             <label class="promo-toggle">
               <input type="checkbox" id="isPromo">
@@ -508,8 +529,8 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
           <div class="form-grid g2">
             <div class="field">
-              <div class="field-label">Điểm thưởng / 1.000₫</div>
-              <input type="number" id="pointRate" value="1" min="0" step="0.1" oninput="renderPreview()">
+              <div class="field-label">Care Point tặng khách</div>
+              <input type="number" id="carePoint" value="0" min="0" step="1" oninput="renderPreview()" placeholder="Nhập số điểm...">
             </div>
             <div class="field">
               <div class="field-label">Phí vận chuyển tham khảo (₫)</div>
@@ -558,12 +579,17 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
     </div>
     <div class="pr-scroll">
       <div class="quote-card" id="quoteCard">
+        <div class="quote-card-inner">
 
         <!-- Header: logo banner style -->
-        <div class="qc-header">
-          <div class="qc-header-body">
+        <div class="qc-header" style="position:relative;overflow:visible;min-height:80px;padding-left:110px">
+          <!-- Bác sĩ gấu: tràn cả trên lẫn dưới -->
+          <img src="https://lhthuan.github.io/invoice/bs_gau.png" alt="Bác sĩ gấu"
+               style="position:absolute;left:10px;bottom:0;height:115px;width:auto;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3));z-index:2"
+               onerror="this.style.display='none'">
+          <div class="qc-header-body" style="padding-left:8px">
             <div class="qc-brand-logo">
-              <img src="https://lhthuan.github.io/invoice/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width:200px;height:auto;">
+              <img src="https://lhthuan.github.io/invoice/logo-trungson.png" alt="Trung Sơn Pharma" style="max-width:180px;height:auto;">
             </div>
             <div class="qc-header-right">
               <div class="qc-doc-title">Báo giá đơn hàng</div>
@@ -641,6 +667,21 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="sum-row"><span class="sum-label">Giảm giá trực tiếp</span><span class="sum-val neg" id="qcDiscDirect">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá voucher</span><span class="sum-val neg" id="qcDiscVoucher">0 ₫</span></div>
           </div>
+                  <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
+        <div class="qc-footer" style="grid-template-columns:1fr">
+          <div class="qcf-cell" style="border-right:none">
+            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt</div></div>
+          </div>
+          <!-- Care Point: tạm ẩn -->
+          <div style="display:none" id="qcPointsRow">
+            <span id="qcPoints"></span>
+          </div>
+        </div>
+        <div class="qc-note" id="qcNoteWrap" style="display:none">
+          <div class="qc-note-text" id="qcNoteText"></div>
+        </div>
+
           <div class="sum-total-row">
             <span class="sum-total-label">Thành tiền</span>
             <span class="sum-total-val" id="qcTotal">0 ₫</span>
@@ -654,21 +695,26 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="qc-footer">
-          <div class="qcf-cell">
-            <div class="qcf-icon pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-            <div><div class="qcf-lbl">Điểm thưởng tích lũy</div><div class="qcf-val pt-val" id="qcPoints">+ 0 điểm</div></div>
-          </div>
-          <div class="qcf-cell">
-            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
-            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt khi nhận</div></div>
-          </div>
-        </div>
-        <div class="qc-note" id="qcNoteWrap" style="display:none">
-          <div class="qc-note-text" id="qcNoteText"></div>
-        </div>
 
+        <!-- Thank you footer -->
+        <div class="qc-thankyou">
+          <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
+          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi. Hy vọng sản phẩm từ <strong>Trung Sơn Care</strong> chăm sóc tốt sức khỏe gia đình bạn.</div>
+          <hr class="qc-thankyou-divider">
+          <div class="qc-contact-row">
+            <div class="qc-contact-cell">
+              <span class="qc-contact-lbl">Hotline 24/7</span>
+              <span class="qc-contact-val">1800&nbsp;5588&nbsp;98</span>
+            </div>
+            <div class="qc-contact-cell">
+              <span class="qc-contact-lbl">Website</span>
+              <span class="qc-contact-val website">trungsoncare.com</span>
+            </div>
+          </div>
+        </div>
+        <div class="qc-thankyou-bar">Hệ thống nhà thuốc Trung Sơn Pharma — <em>"Chất lượng cao, Niềm tin lớn"</em></div>
+
+        </div><!-- /quote-card-inner -->
       </div>
     </div>
   </div>
@@ -803,7 +849,7 @@ function showSKUResult(d) {
   document.getElementById('skuName').textContent = d.name;
   document.getElementById('skuMeta').textContent = 'SKU: ' + d.sku + (packF ? ' · ' + packF.value : '');
   document.getElementById('skuPriceInput').value = d.price;
-  document.getElementById('skuUnit').textContent  = unit;
+  document.getElementById('skuUnitInput').value  = unit;
   document.getElementById('skuUnit2').textContent = '₫ / ' + unit;
   document.getElementById('addQty').value  = 1;
   document.getElementById('isPromo').checked = false;
@@ -829,17 +875,17 @@ function addToCart() {
   const d     = currentSKU;
   const qty   = Math.max(1, parseInt(document.getElementById('addQty').value)||1);
   const promo = document.getElementById('isPromo').checked;
-  // Lấy giá từ ô editable (có thể đã chỉnh)
   const price = promo ? 0 : (parseFloat(document.getElementById('skuPriceInput').value) || d.price);
-  const unitF = (d.features||[]).find(f => f.name === 'Đơn vị tính');
-  const unit  = unitF ? unitF.value : 'Sp';
+  // Đọc đơn vị từ ô editable (người dùng có thể đã sửa)
+  const unit  = document.getElementById('skuUnitInput').value.trim() || 'Sp';
 
   const ex = cart.find(p => p.sku === d.sku && p.promo === promo && p.price === price);
   if (ex) {
     ex.qty += qty;
     toast(`Cộng thêm ${qty} — ${d.name}`, 'info');
   } else {
-    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: d.images?.[0] ?? '', promo });
+    const rawImg = d.images?.[0] ?? '';
+    cart.push({ sku: d.sku, name: d.name, price, qty, unit, img: rawImg, _rawImg: rawImg, promo });
     toast(promo ? `🎁 KM: ${d.name}` : `Đã thêm: ${d.name}`, 'success');
   }
   renderPreview();
@@ -874,7 +920,7 @@ function copySender() {
 /* ══ RENDER ══ */
 function renderPreview() {
   const g   = id => document.getElementById(id);
-  const val = id => g(id).value;
+  const val = id => { const el=g(id); return el ? el.value : ''; }; // Fix 7: null-safe
 
   g('qcOrderId').textContent = orderId;
   g('previewId').textContent = orderId;
@@ -885,7 +931,10 @@ function renderPreview() {
   g('qcReceiverPhone').textContent = val('receiverPhone')|| '—';
   g('qcAddress').textContent  = val('address') || '—';
   const dd = val('deliveryDate');
-  g('qcDelivery').textContent = dd ? fmtDate(new Date(dd+'T00:00:00')) + ' (Giao tại nhà)' : '—';
+  const deliveryLabel = selectedNotice === 2 ? 'Nhận tại quầy' : selectedNotice === 1 ? 'Giao tại nhà' : '';
+  g('qcDelivery').textContent = dd
+    ? fmtDate(new Date(dd+'T00:00:00')) + (deliveryLabel ? ' (' + deliveryLabel + ')' : '')
+    : '—';
   g('qcPayment').textContent  = val('paymentMethod');
 
   // Notice block
@@ -911,7 +960,10 @@ function renderPreview() {
       <tr class="${p.promo?'promo-row':''}">
         <td class="qt-stt">${i+1}</td>
         <td><div class="qt-prod">
-          ${p.img?`<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="" crossorigin="anonymous">`:''}
+          ${p.img
+            ? `<img class="qt-img" src="${p.img}" onerror="this.style.display='none'" alt="">`
+            : `<div class="qt-img-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`
+          }
           <div>
             <div class="qt-prod-name">${p.name}${p.promo?BADGE:''}</div>
             ${p.sku?`<div class="qt-prod-sku">SKU: ${p.sku}</div>`:''}
@@ -936,15 +988,14 @@ function renderPreview() {
   const dd2   = parseFloat(val('discountDirect'))||0;
   const dv    = parseFloat(val('discountVoucher'))||0;
   const sf    = parseFloat(val('shipFee'))||0;
-  const pr    = parseFloat(val('pointRate'))||1;
   const total = Math.max(0, sub - dd2 - dv);
-  const pts   = Math.floor(total / 1000 * pr);
+  const pts   = parseInt(val('carePoint')) || 0;
 
   g('qcSubtotal').textContent    = fmt(sub) + ' ₫';
   g('qcDiscDirect').textContent  = dd2 > 0 ? '-' + fmt(dd2) + ' ₫' : '0 ₫';
   g('qcDiscVoucher').textContent = dv  > 0 ? '-' + fmt(dv)  + ' ₫' : '0 ₫';
   g('qcTotal').textContent       = fmt(total) + ' ₫';
-  g('qcPoints').textContent      = '+ ' + fmt(pts) + ' điểm';
+  g('qcPoints').textContent      = pts > 0 ? '+ ' + fmt(pts) + ' điểm' : '—';
 
   const shipRow = g('qcShipRefRow');
   if (sf > 0) { shipRow.style.display='flex'; g('qcShipRef').textContent='~'+fmt(sf)+' ₫'; }
@@ -962,11 +1013,14 @@ function clearCart(){ if(!cart.length)return; if(!confirm('Xoá toàn bộ?'))re
 function newOrder(){
   if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
   cart=[];counter++;localStorage.setItem('tsp_ctr',counter);orderId=makeId();
-  ['senderName','senderPhone','receiverName','receiverPhone','address','deliveryDate','orderNote']
+  ['senderName','senderPhone','receiverName','receiverPhone','address','orderNote']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  // Fix 8: reset về +2 ngày, không để trống
+  document.getElementById('deliveryDate').value=new Date(Date.now()+2*86400000).toISOString().split('T')[0];
   document.getElementById('discountDirect').value=0;
   document.getElementById('discountVoucher').value=0;
   document.getElementById('shipFee').value=0;
+  document.getElementById('carePoint').value=0;
   selectedNotice = 0;
   NOTICES.forEach((_,i)=>{ const p=document.getElementById('noticePill'+i); if(p) p.classList.toggle('active', i===0); });
   document.getElementById('skuResult').classList.remove('show');
@@ -976,34 +1030,67 @@ function newOrder(){
 
 /* ══ EXPORT IMAGE ══ */
 
-// Fetch bất kỳ URL ảnh → base64 data URI qua Cloudflare Worker
+/*
+  ⚠️  ĐỂ ẢNH SẢN PHẨM HIỂN THỊ KHI EXPORT:
+  Vào https://dash.cloudflare.com → Workers → trungson-api → Edit code
+  Thay toàn bộ bằng code sau rồi Deploy:
+
+  export default {
+    async fetch(request) {
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' };
+      const url = new URL(request.url);
+      const imgurl = url.searchParams.get('imgurl');
+      if (imgurl) {
+        try {
+          const r = await fetch(imgurl);
+          const blob = await r.blob();
+          return new Response(blob, { headers: { ...cors, 'Content-Type': r.headers.get('Content-Type') || 'image/jpeg', 'Cache-Control': 'public,max-age=3600' } });
+        } catch(e) { return new Response('error', { status: 502, headers: cors }); }
+      }
+      const sku = url.searchParams.get('sku');
+      if (!sku) return new Response('{}', { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
+      try {
+        const r = await fetch(`https://trungsoncare.com/?dispatch=api_products.detail&sku=${encodeURIComponent(sku)}`);
+        const data = await r.json();
+        return new Response(JSON.stringify(data), { headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public,max-age=300' } });
+      } catch(e) { return new Response(JSON.stringify({status:false,message:e.message}), { status:500, headers:{...cors,'Content-Type':'application/json'} }); }
+    }
+  }
+*/
+
+const WORKER = url => `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
+
+async function blobToB64(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload  = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
+
+// Proxy ảnh qua Worker → base64. Trả null nếu fail.
 async function imgToBase64(url) {
-  if (!url) return null;
+  if (!url || url.startsWith('data:')) return url;
   try {
-    // Dùng worker proxy để bypass CORS — thêm param &type=img
-    const proxyUrl = `https://trungson-api.lamhieuthuan.workers.dev/?imgurl=${encodeURIComponent(url)}`;
-    const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error('fetch failed');
+    const r = await fetch(WORKER(url), { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error('not ok');
     const blob = await r.blob();
-    return await new Promise((res, rej) => {
-      const fr = new FileReader();
-      fr.onload  = () => res(fr.result);
-      fr.onerror = rej;
-      fr.readAsDataURL(blob);
-    });
+    if (!blob.size) throw new Error('empty');
+    const b64 = await blobToB64(blob);
+    // Validate: phải là data URI hợp lệ
+    if (b64 && b64.startsWith('data:image')) return b64;
+    throw new Error('invalid b64');
   } catch {
-    // Fallback: thử fetch trực tiếp (đôi khi được nếu server cho phép)
+    // Fallback: fetch trực tiếp (chỉ work nếu server có CORS - GitHub Pages thì được)
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(5000), mode: 'cors' });
+      const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!r.ok) throw new Error();
       const blob = await r.blob();
-      return await new Promise((res, rej) => {
-        const fr = new FileReader();
-        fr.onload  = () => res(fr.result);
-        fr.onerror = rej;
-        fr.readAsDataURL(blob);
-      });
-    } catch { return null; }
+      const b64 = await blobToB64(blob);
+      if (b64 && b64.startsWith('data:image')) return b64;
+    } catch {}
+    return null; // fail hoàn toàn
   }
 }
 
@@ -1012,30 +1099,34 @@ async function exportImage(mode) {
   const overlay = document.getElementById('exportOverlay');
   const msg     = document.getElementById('exportMsg');
   overlay.classList.add('open');
-  msg.textContent = 'Đang tải ảnh...';
+  msg.textContent = 'Đang chuyển ảnh...';
 
-  // Ẩn nút xoá
-  document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='0');
+  document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '0');
 
-  // Tập hợp tất cả img trong quote card, swap sang base64
   const card = document.getElementById('quoteCard');
   const imgs = Array.from(card.querySelectorAll('img'));
   const origSrcs = imgs.map(img => img.src);
 
   try {
-    msg.textContent = 'Đang chuyển ảnh sang base64...';
-    // Fetch tất cả ảnh song song
-    const b64s = await Promise.all(origSrcs.map(src => imgToBase64(src)));
-    // Swap src sang base64 (chỉ khi fetch thành công)
-    imgs.forEach((img, i) => { if (b64s[i]) img.src = b64s[i]; });
+    // Convert TẤT CẢ ảnh (kể cả đã base64 - skip) song song qua Worker
+    const b64s = await Promise.all(origSrcs.map(src => {
+      if (!src) return Promise.resolve(null);
+      if (src.startsWith('data:image')) return Promise.resolve(src); // đã ok
+      return imgToBase64(src);
+    }));
 
-    await new Promise(r=>setTimeout(r,120)); // cho DOM repaint
-    msg.textContent = mode==='clipboard' ? 'Đang tạo ảnh để copy...' : 'Đang xuất JPG...';
+    // Swap: chỉ thay nếu convert thành công (data URI hợp lệ)
+    imgs.forEach((img, i) => {
+      if (b64s[i] && b64s[i].startsWith('data:image')) img.src = b64s[i];
+    });
+
+    await new Promise(r => setTimeout(r, 100));
+    msg.textContent = mode === 'clipboard' ? 'Đang tạo ảnh...' : 'Đang xuất JPG...';
 
     const canvas = await html2canvas(card, {
       scale: 2,
-      useCORS: false,      // tắt vì đã dùng base64
-      allowTaint: true,
+      useCORS: false,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
     });
@@ -1044,12 +1135,12 @@ async function exportImage(mode) {
     imgs.forEach((img, i) => img.src = origSrcs[i]);
 
     if (mode === 'download') {
-      const link = document.createElement('a');
-      link.download = `baogía-${orderId.replace('#','')}-${Date.now()}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.92);
-      link.click();
+      const a = document.createElement('a');
+      a.download = `baogía-${orderId.replace('#','')}-${Date.now()}.jpg`;
+      a.href = canvas.toDataURL('image/jpeg', 0.92);
+      a.click();
       toast('Đã tải xuống ảnh JPG ✅', 'success');
-      document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+      document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
       overlay.classList.remove('open');
     } else {
       canvas.toBlob(async blob => {
@@ -1063,13 +1154,13 @@ async function exportImage(mode) {
           a.click();
           toast('Clipboard bị chặn — đã tải xuống thay thế', 'info');
         }
-        document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+        document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
         overlay.classList.remove('open');
       }, 'image/png');
     }
   } catch(e) {
     imgs.forEach((img, i) => img.src = origSrcs[i]);
-    document.querySelectorAll('.qt-del-btn').forEach(b=>b.style.opacity='');
+    document.querySelectorAll('.qt-del-btn').forEach(b => b.style.opacity = '');
     overlay.classList.remove('open');
     toast('Lỗi xuất ảnh: ' + e.message, 'error');
   }
@@ -1080,98 +1171,114 @@ function getSaved(){ try{return JSON.parse(localStorage.getItem('tsp_orders')||'
 function setSaved(l){ localStorage.setItem('tsp_orders',JSON.stringify(l)); }
 
 function getSnapshot(){
-  const v  = id=>document.getElementById(id).value;
+  const v  = id => { const el=document.getElementById(id); return el ? el.value : ''; };
   const sub= cart.reduce((s,p)=>s+(p.promo?0:p.price*p.qty),0);
   const dd = parseFloat(v('discountDirect'))||0;
   const dv = parseFloat(v('discountVoucher'))||0;
   const sf = parseFloat(v('shipFee'))||0;
+  // Strip base64 img khi lưu để tránh vượt quota localStorage 5MB
+  // Chỉ lưu URL gốc (nếu có), restore lại khi load
+  const cartToSave = cart.map(p => ({
+    ...p,
+    img: p.img && p.img.startsWith('data:') ? (p._rawImg || '') : p.img
+  }));
   return {
     id:orderId, savedAt:new Date().toISOString(),
     total:Math.max(0,sub-dd-dv),
-    cart:JSON.parse(JSON.stringify(cart)),
+    selectedNotice,
+    cart: cartToSave,
     form:{
       senderName:v('senderName'),senderPhone:v('senderPhone'),
       receiverName:v('receiverName'),receiverPhone:v('receiverPhone'),
       address:v('address'),deliveryDate:v('deliveryDate'),
       paymentMethod:v('paymentMethod'),
       discountDirect:dd,discountVoucher:dv,shipFee:sf,
-      pointRate:parseFloat(v('pointRate'))||1,
+      carePoint:parseInt(v('carePoint'))||0,
       orderNote:v('orderNote')
     }
   };
 }
 
+// Lưu order index trong window để tránh JSON.stringify trong onclick (fix lỗi tên có dấu nháy)
+window._savedOrders = [];
+
 function saveCurrentOrder(){
   const snap=getSnapshot();
-  snap.name=snap.form.receiverName?`Đơn ${snap.form.receiverName} – ${fmtDate(new Date())}`:`${snap.id} – ${fmtDate(new Date())}`;
-  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  const rec=snap.form.receiverName;
+  snap.name=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:`${snap.id} – ${fmtDate(new Date())}`;
+  const list=getSaved(); const idx=list.findIndex(o=>o.id===orderId);
   if(idx>=0)list[idx]=snap;else list.unshift(snap);
   setSaved(list);refreshSavedUI();toast('Đã lưu: '+snap.name,'success');
 }
 
 function saveOrder(){
   const snap=getSnapshot();
-  snap.name=document.getElementById('saveOrderName').value.trim()||(snap.form.receiverName?`Đơn ${snap.form.receiverName}`:snap.id);
-  const list=getSaved();const idx=list.findIndex(o=>o.id===orderId);
+  const nameInput=document.getElementById('saveOrderName').value.trim();
+  const rec=snap.form.receiverName;
+  snap.name=nameInput||(rec?`Đơn ${rec}`:snap.id);
+  const list=getSaved(); const idx=list.findIndex(o=>o.id===orderId);
   if(idx>=0)list[idx]=snap;else list.unshift(snap);
   setSaved(list);refreshSavedUI();renderSavedModal();toast('Đã lưu: '+snap.name,'success');
 }
 
-function loadOrder(o){
-  cart=JSON.parse(JSON.stringify(o.cart));orderId=o.id;
+function loadOrder(idx){
+  const o = window._savedOrders[idx];
+  if (!o) return;
+  cart=JSON.parse(JSON.stringify(o.cart)); orderId=o.id;
+  // Restore selectedNotice
+  selectedNotice = o.selectedNotice ?? 0;
+  NOTICES.forEach((_,i)=>{ const p=document.getElementById('noticePill'+i); if(p) p.classList.toggle('active',i===selectedNotice); });
   const f=o.form;
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
   set('senderName',f.senderName);set('senderPhone',f.senderPhone);
   set('receiverName',f.receiverName);set('receiverPhone',f.receiverPhone);
   set('address',f.address);set('deliveryDate',f.deliveryDate);
-  document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt khi nhận';
+  document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt';
   set('discountDirect',f.discountDirect||0);set('discountVoucher',f.discountVoucher||0);
-  set('shipFee',f.shipFee||0);set('pointRate',f.pointRate||1);
+  set('shipFee',f.shipFee||0);set('carePoint',f.carePoint||0);
   set('orderNote',f.orderNote);
   renderPreview();closeSaveModal();toast('Đã tải đơn: '+o.name,'success');
 }
 
-function deleteOrder(id,e){
-  e.stopPropagation();if(!confirm('Xoá đơn này?'))return;
-  setSaved(getSaved().filter(o=>o.id!==id));
+function deleteOrder(idx,e){
+  e.stopPropagation();
+  const o = window._savedOrders[idx];
+  if(!o || !confirm('Xoá đơn này?')) return;
+  setSaved(getSaved().filter(s=>s.id!==o.id));
   refreshSavedUI();renderSavedModal();toast('Đã xoá','info');
+}
+
+function _renderSavedList(list, elId, maxItems){
+  window._savedOrders = list; // index-based reference, safe with any characters in name
+  const el=document.getElementById(elId);
+  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
+  const items = maxItems ? list.slice(0,maxItems) : list;
+  el.innerHTML=items.map((o,i)=>`
+    <div class="saved-item" onclick="loadOrder(${i})">
+      <div class="saved-item-info">
+        <div class="saved-name">${o.name.replace(/</g,'&lt;')}</div>
+        <div class="saved-meta">${o.id} · ${o.savedAt?fmtDate(new Date(o.savedAt)):''} · ${fmt(o.total)} ₫</div>
+      </div>
+      <button class="saved-del" onclick="deleteOrder(${i},event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>`).join('');
 }
 
 function refreshSavedUI(){
   const list=getSaved();
   document.getElementById('savedCount').textContent=list.length;
-  const el=document.getElementById('savedListSidebar');
-  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
-  el.innerHTML=list.slice(0,5).map(o=>`
-    <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
-      <div class="saved-item-info">
-        <div class="saved-name">${o.name}</div>
-        <div class="saved-meta">${o.id} · ${fmt(o.total)} ₫</div>
-      </div>
-      <button class="saved-del" onclick="deleteOrder('${o.id}',event)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-      </button>
-    </div>`).join('');
+  _renderSavedList(list,'savedListSidebar',5);
 }
 
 function renderSavedModal(){
-  const list=getSaved();const el=document.getElementById('savedListModal');
-  if(!list.length){el.innerHTML='<div class="empty-saved">Chưa có đơn nào</div>';return;}
-  el.innerHTML=list.map(o=>`
-    <div class="saved-item" onclick='loadOrder(${JSON.stringify(o)})'>
-      <div class="saved-item-info">
-        <div class="saved-name">${o.name}</div>
-        <div class="saved-meta">${o.id} · ${fmtDate(new Date(o.savedAt))} · ${fmt(o.total)} ₫</div>
-      </div>
-      <button class="saved-del" onclick="deleteOrder('${o.id}',event)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-      </button>
-    </div>`).join('');
+  _renderSavedList(getSaved(),'savedListModal',0);
 }
 
 function openSaveModal(){
-  const rec=document.getElementById('receiverName').value;
-  document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:` ${orderId} – ${fmtDate(new Date())}`;
+  const rec=document.getElementById('receiverName').value.trim();
+  // Fix 6: bỏ leading space
+  document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:orderId+' – '+fmtDate(new Date());
   renderSavedModal();
   document.getElementById('saveModal').classList.add('open');
 }
