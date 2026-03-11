@@ -593,7 +593,15 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             </div>
             <div class="qc-header-right">
               <div class="qc-doc-title">Báo giá đơn hàng</div>
-              <div class="qc-doc-id" id="qcOrderId">#TSP-000001</div>
+              <div class="qc-doc-id" id="qcOrderId"
+                   contenteditable="true"
+                   spellcheck="false"
+                   title="Click để chỉnh sửa mã đơn"
+                   style="cursor:text;outline:none;border-bottom:1.5px dashed rgba(255,255,255,.4);padding-bottom:1px;min-width:60px;display:inline-block"
+                   oninput="orderId=this.textContent.trim();document.getElementById('previewId').textContent=orderId"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+                   onblur="if(!this.textContent.trim()){this.textContent=orderId}else{orderId=this.textContent.trim();document.getElementById('previewId').textContent=orderId}"
+              >#TSP-000001</div>
               <div class="qc-doc-date" id="qcDate"></div>
             </div>
           </div>
@@ -667,21 +675,6 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="sum-row"><span class="sum-label">Giảm giá trực tiếp</span><span class="sum-val neg" id="qcDiscDirect">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá voucher</span><span class="sum-val neg" id="qcDiscVoucher">0 ₫</span></div>
           </div>
-                  <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
-        <div class="qc-footer" style="grid-template-columns:1fr">
-          <div class="qcf-cell" style="border-right:none">
-            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
-            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt</div></div>
-          </div>
-          <!-- Care Point: tạm ẩn -->
-          <div style="display:none" id="qcPointsRow">
-            <span id="qcPoints"></span>
-          </div>
-        </div>
-        <div class="qc-note" id="qcNoteWrap" style="display:none">
-          <div class="qc-note-text" id="qcNoteText"></div>
-        </div>
-
           <div class="sum-total-row">
             <span class="sum-total-label">Thành tiền</span>
             <span class="sum-total-val" id="qcTotal">0 ₫</span>
@@ -695,6 +688,20 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
 
+        <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
+        <div class="qc-footer" style="grid-template-columns:1fr">
+          <div class="qcf-cell" style="border-right:none">
+            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt</div></div>
+          </div>
+          <!-- Care Point: tạm ẩn -->
+          <div style="display:none" id="qcPointsRow">
+            <span id="qcPoints"></span>
+          </div>
+        </div>
+        <div class="qc-note" id="qcNoteWrap" style="display:none">
+          <div class="qc-note-text" id="qcNoteText"></div>
+        </div>
 
         <!-- Thank you footer -->
         <div class="qc-thankyou">
@@ -749,7 +756,14 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           💾 Đơn lưu trong trình duyệt. Tắt/bật lại vẫn còn.
         </div>
         <div>
-          <div class="sec-title" style="margin-bottom:10px">Đơn đã lưu</div>
+          <div class="sec-title" style="margin-bottom:8px">Đơn đã lưu</div>
+          <!-- Search box -->
+          <div style="position:relative;margin-bottom:10px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--text-3);pointer-events:none"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="savedSearchInput" placeholder="Tìm theo mã đơn, tên, SĐT..."
+                   style="padding-left:32px;font-size:12.5px"
+                   oninput="filterSavedList(this.value)">
+          </div>
           <div class="saved-list" id="savedListModal"><div class="empty-saved">Chưa có đơn nào</div></div>
         </div>
       </div>
@@ -922,7 +936,8 @@ function renderPreview() {
   const g   = id => document.getElementById(id);
   const val = id => { const el=g(id); return el ? el.value : ''; }; // Fix 7: null-safe
 
-  g('qcOrderId').textContent = orderId;
+  // Chỉ cập nhật mã đơn nếu người dùng không đang focus chỉnh sửa
+  if (document.activeElement !== g('qcOrderId')) g('qcOrderId').textContent = orderId;
   g('previewId').textContent = orderId;
   g('qcDate').textContent    = 'Ngày lập: ' + fmtDate(new Date());
   g('qcSenderName').textContent    = val('senderName')   || '—';
@@ -1277,12 +1292,41 @@ function renderSavedModal(){
 
 function openSaveModal(){
   const rec=document.getElementById('receiverName').value.trim();
-  // Fix 6: bỏ leading space
   document.getElementById('saveOrderName').value=rec?`Đơn ${rec} – ${fmtDate(new Date())}`:orderId+' – '+fmtDate(new Date());
+  // Reset ô tìm kiếm
+  const s = document.getElementById('savedSearchInput');
+  if (s) s.value = '';
   renderSavedModal();
   document.getElementById('saveModal').classList.add('open');
 }
 function closeSaveModal(){ document.getElementById('saveModal').classList.remove('open'); }
+
+function filterSavedList(q) {
+  const kw = q.trim().toLowerCase();
+  if (!kw) { renderSavedModal(); return; }
+  const list = getSaved().filter(o => {
+    const f = o.form || {};
+    return (o.id  || '').toLowerCase().includes(kw)
+        || (o.name|| '').toLowerCase().includes(kw)
+        || (f.receiverName  || '').toLowerCase().includes(kw)
+        || (f.senderName    || '').toLowerCase().includes(kw)
+        || (f.receiverPhone || '').toLowerCase().includes(kw)
+        || (f.senderPhone   || '').toLowerCase().includes(kw);
+  });
+  window._savedOrders = list;
+  const el = document.getElementById('savedListModal');
+  if (!list.length) { el.innerHTML = '<div class="empty-saved">Không tìm thấy đơn nào</div>'; return; }
+  el.innerHTML = list.map((o, i) => `
+    <div class="saved-item" onclick="loadOrder(${i})">
+      <div class="saved-item-info">
+        <div class="saved-name">${o.name.replace(/</g,'&lt;')}</div>
+        <div class="saved-meta">${o.id} · ${o.savedAt?fmtDate(new Date(o.savedAt)):''} · ${fmt(o.total)} ₫</div>
+      </div>
+      <button class="saved-del" onclick="deleteOrder(${i},event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+      </button>
+    </div>`).join('');
+}
 
 /* ══ PRINT ══ */
 function printQuote(){ if(!cart.length){toast('Chưa có sản phẩm','error');return;} window.print(); }
