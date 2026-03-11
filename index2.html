@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lập Báo Giá 12h17 — Trung Sơn Pharma</title>
+<title>Lập Báo Giá — Trung Sơn Pharma</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- html2canvas for image export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -265,18 +265,18 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
 .export-overlay p{color:#fff;font-weight:600;font-size:14px}
 
 /* ══ THANK YOU FOOTER ══ */
-.qc-thankyou{padding:16px 22px 0;text-align:center}
-.qc-thankyou-title{font-size:15px;font-weight:800;color:var(--orange);margin-bottom:5px}
-.qc-thankyou-sub{font-size:12px;color:var(--text-2);line-height:1.55;max-width:400px;margin:0 auto 12px}
+.qc-thankyou{padding:12px 22px 0;text-align:center}
+.qc-thankyou-title{font-size:14px;font-weight:800;color:var(--orange);margin-bottom:4px}
+.qc-thankyou-sub{font-size:11.5px;color:var(--text-2);line-height:1.5;max-width:480px;margin:0 auto 10px}
 .qc-thankyou-sub strong{color:var(--text)}
-.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 10px}
+.qc-thankyou-divider{border:none;border-top:1px dashed var(--border);margin:0 0 8px}
 .qc-contact-row{display:flex;justify-content:center}
-.qc-contact-cell{flex:1;padding:8px 14px;text-align:center;border-right:1px solid var(--border-light)}
+.qc-contact-cell{display:flex;align-items:center;gap:7px;padding:6px 18px;border-right:1px solid var(--border-light)}
 .qc-contact-cell:last-child{border-right:none}
-.qc-contact-lbl{font-size:9.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
-.qc-contact-val{font-size:14px;font-weight:800;color:var(--orange);font-family:var(--mono)}
-.qc-contact-val.website{font-family:var(--font);font-size:12.5px;font-weight:700}
-.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:8px 22px;text-align:center;font-size:11.5px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg);margin-top:10px}
+.qc-contact-lbl{font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap}
+.qc-contact-val{font-size:13px;font-weight:800;color:var(--orange);font-family:var(--mono);white-space:nowrap}
+.qc-contact-val.website{font-family:var(--font);font-size:12px;font-weight:700}
+.qc-thankyou-bar{background:linear-gradient(135deg,var(--orange) 0%,var(--orange-mid) 100%);color:#fff;padding:7px 22px;text-align:center;font-size:11px;font-weight:600;font-style:italic;letter-spacing:.2px;border-radius:0 0 var(--r-lg) var(--r-lg);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ══ NOTICE BLOCK in quote card ══ */
 .qc-notice{border-top:1px solid var(--border-light);padding:10px 22px 14px}
@@ -390,11 +390,11 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="field">
               <div class="field-label">Thanh toán</div>
               <select id="paymentMethod" onchange="renderPreview()">
-                <option>Tiền mặt khi nhận</option>
+                <option>Tiền mặt</option>
                 <option>Chuyển khoản</option>
-                <option>Ví MoMo</option>
-                <option>ZaloPay</option>
-                <option>VNPay</option>
+                <option>QR Pay</option>
+                <option>Quẹt thẻ</option>
+                <option>Thu hộ (COD)</option>
               </select>
             </div>
           </div>
@@ -440,13 +440,17 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
                 <input type="number" class="sku-price-input" id="skuPriceInput" min="0" step="500">
                 <span class="sku-price-unit" id="skuUnit2">₫ / Sp</span>
               </div>
+              <!-- Editable unit -->
+              <div class="sku-price-row" style="margin-top:5px">
+                <span class="sku-price-label">Đơn vị:</span>
+                <input type="text" id="skuUnitInput" style="width:110px;font-size:12.5px;font-weight:600;padding:3px 7px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--font)" placeholder="Hộp, Chai, Viên...">
+              </div>
             </div>
           </div>
           <div class="sku-add-row">
             <div class="qty-ctrl">
               <span>SL:</span>
               <input type="number" id="addQty" value="1" min="1">
-              <span id="skuUnit" style="font-size:11px;color:var(--text-3)">Sp</span>
             </div>
             <label class="promo-toggle">
               <input type="checkbox" id="isPromo">
@@ -676,20 +680,15 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="qc-footer">
-          <div class="qcf-cell care-pt">
-            <div class="qcf-icon pt">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div class="qcf-lbl">Điểm thưởng <span class="care-pt-badge">Care Point</span></div>
-              <div class="qcf-val pt-val" id="qcPoints">+ 0 điểm</div>
-            </div>
-          </div>
-          <div class="qcf-cell">
+        <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
+        <div class="qc-footer" style="grid-template-columns:1fr">
+          <div class="qcf-cell" style="border-right:none">
             <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
-            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt khi nhận</div></div>
+            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt</div></div>
+          </div>
+          <!-- Care Point: tạm ẩn -->
+          <div style="display:none" id="qcPointsRow">
+            <span id="qcPoints"></span>
           </div>
         </div>
         <div class="qc-note" id="qcNoteWrap" style="display:none">
@@ -699,22 +698,20 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         <!-- Thank you footer -->
         <div class="qc-thankyou">
           <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
-          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi. Hy vọng các sản phẩm từ <strong>Trung Sơn Care</strong> sẽ chăm sóc tốt nhất cho sức khỏe gia đình bạn.</div>
+          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi. Hy vọng sản phẩm từ <strong>Trung Sơn Care</strong> chăm sóc tốt sức khỏe gia đình bạn.</div>
           <hr class="qc-thankyou-divider">
           <div class="qc-contact-row">
             <div class="qc-contact-cell">
-              <div class="qc-contact-lbl">Hotline 24/7</div>
-              <div class="qc-contact-val">1800 5588 98</div>
+              <span class="qc-contact-lbl">Hotline 24/7</span>
+              <span class="qc-contact-val">1800&nbsp;5588&nbsp;98</span>
             </div>
             <div class="qc-contact-cell">
-              <div class="qc-contact-lbl">Website</div>
-              <div class="qc-contact-val website">trungsoncare.com</div>
+              <span class="qc-contact-lbl">Website</span>
+              <span class="qc-contact-val website">trungsoncare.com</span>
             </div>
           </div>
         </div>
-        <div class="qc-thankyou-bar">
-          Hệ thống nhà thuốc Trung Sơn Pharma — <em>"Chất lượng cao, Niềm tin lớn"</em>
-        </div>
+        <div class="qc-thankyou-bar">Hệ thống nhà thuốc Trung Sơn Pharma — <em>"Chất lượng cao, Niềm tin lớn"</em></div>
 
         </div><!-- /quote-card-inner -->
       </div>
@@ -851,7 +848,7 @@ function showSKUResult(d) {
   document.getElementById('skuName').textContent = d.name;
   document.getElementById('skuMeta').textContent = 'SKU: ' + d.sku + (packF ? ' · ' + packF.value : '');
   document.getElementById('skuPriceInput').value = d.price;
-  document.getElementById('skuUnit').textContent  = unit;
+  document.getElementById('skuUnitInput').value  = unit;
   document.getElementById('skuUnit2').textContent = '₫ / ' + unit;
   document.getElementById('addQty').value  = 1;
   document.getElementById('isPromo').checked = false;
@@ -878,8 +875,8 @@ function addToCart() {
   const qty   = Math.max(1, parseInt(document.getElementById('addQty').value)||1);
   const promo = document.getElementById('isPromo').checked;
   const price = promo ? 0 : (parseFloat(document.getElementById('skuPriceInput').value) || d.price);
-  const unitF = (d.features||[]).find(f => f.name === 'Đơn vị tính');
-  const unit  = unitF ? unitF.value : 'Sp';
+  // Đọc đơn vị từ ô editable (người dùng có thể đã sửa)
+  const unit  = document.getElementById('skuUnitInput').value.trim() || 'Sp';
 
   const ex = cart.find(p => p.sku === d.sku && p.promo === promo && p.price === price);
   if (ex) {
@@ -933,7 +930,10 @@ function renderPreview() {
   g('qcReceiverPhone').textContent = val('receiverPhone')|| '—';
   g('qcAddress').textContent  = val('address') || '—';
   const dd = val('deliveryDate');
-  g('qcDelivery').textContent = dd ? fmtDate(new Date(dd+'T00:00:00')) + ' (Giao tại nhà)' : '—';
+  const deliveryLabel = selectedNotice === 2 ? 'Nhận tại quầy' : selectedNotice === 1 ? 'Giao tại nhà' : '';
+  g('qcDelivery').textContent = dd
+    ? fmtDate(new Date(dd+'T00:00:00')) + (deliveryLabel ? ' (' + deliveryLabel + ')' : '')
+    : '—';
   g('qcPayment').textContent  = val('paymentMethod');
 
   // Notice block
@@ -1232,7 +1232,7 @@ function loadOrder(idx){
   set('senderName',f.senderName);set('senderPhone',f.senderPhone);
   set('receiverName',f.receiverName);set('receiverPhone',f.receiverPhone);
   set('address',f.address);set('deliveryDate',f.deliveryDate);
-  document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt khi nhận';
+  document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt';
   set('discountDirect',f.discountDirect||0);set('discountVoucher',f.discountVoucher||0);
   set('shipFee',f.shipFee||0);set('carePoint',f.carePoint||0);
   set('orderNote',f.orderNote);
