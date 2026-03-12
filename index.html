@@ -726,22 +726,15 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="sum-row"><span class="sum-label">Tổng tiền ban đầu</span><span class="sum-val" id="qcSubtotal">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá trực tiếp</span><span class="sum-val neg" id="qcDiscDirect">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá voucher</span><span class="sum-val neg" id="qcDiscVoucher">0 ₫</span></div>
+            <!-- Phương thức thanh toán — nằm giữa giảm giá và thành tiền -->
+            <div class="sum-row" style="padding:8px 0 2px;border-top:1px dashed var(--border-light);margin-top:4px">
+              <span class="sum-label" style="display:flex;align-items:center;gap:6px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;color:var(--blue)"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                Phương thức thanh toán
+              </span>
+              <span class="sum-val" style="font-weight:700;color:var(--blue)" id="qcPayment">Tiền mặt</span>
+            </div>
           </div>
-            <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
-        <div class="qc-footer" style="grid-template-columns:1fr">
-          <div class="qcf-cell" style="border-right:none">
-            <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
-            <div><div class="qcf-lbl">Phương thức thanh toán</div><div class="qcf-val" id="qcPayment">Tiền mặt</div></div>
-          </div>
-          <!-- Care Point: tạm ẩn -->
-          <div style="display:none" id="qcPointsRow">
-            <span id="qcPoints"></span>
-          </div>
-        </div>
-        <div class="qc-note" id="qcNoteWrap" style="display:none">
-          <div class="qc-note-text" id="qcNoteText"></div>
-        </div>
-
           <div class="sum-total-row">
             <span class="sum-total-label">Thành tiền</span>
             <span class="sum-total-val" id="qcTotal">0 ₫</span>
@@ -755,7 +748,12 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
 
-      
+        <!-- Care Point: tạm ẩn (giữ element để JS không lỗi) -->
+        <div style="display:none" id="qcPointsRow"><span id="qcPoints"></span></div>
+        <div class="qc-note" id="qcNoteWrap" style="display:none">
+          <div class="qc-note-text" id="qcNoteText"></div>
+        </div>
+
         <!-- Thank you footer -->
         <div class="qc-thankyou">
           <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
@@ -808,6 +806,29 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         <div style="background:var(--green-xlight);border-radius:var(--r-sm);padding:10px 13px;font-size:12.5px;color:var(--text-2);border:1.5px solid var(--border-light)">
           💾 Đơn lưu trong trình duyệt. Tắt/bật lại vẫn còn.
         </div>
+
+        <!-- Sao lưu / Phục hồi -->
+        <div style="border:1.5px solid var(--border-light);border-radius:var(--r-sm);overflow:hidden">
+          <div style="background:var(--surface-2);padding:8px 13px;font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.9px;border-bottom:1px solid var(--border-light)">
+            🗂 Sao lưu &amp; Phục hồi dữ liệu
+          </div>
+          <div style="padding:10px 13px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;min-width:120px" onclick="exportOrders()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Xuất file sao lưu (.json)
+            </button>
+            <button class="btn btn-outline btn-sm" style="flex:1;justify-content:center;min-width:120px;color:var(--blue);border-color:var(--blue)" onclick="document.getElementById('importFileInput').click()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Nhập file phục hồi
+            </button>
+            <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importOrders(event)">
+          </div>
+          <div style="padding:0 13px 10px;font-size:11px;color:var(--text-3);line-height:1.6">
+            Xuất để lưu backup. Nhập để phục hồi khi đổi trình duyệt hoặc mất dữ liệu.
+            <strong style="color:var(--amber)">Nhập sẽ gộp thêm</strong>, không xoá đơn hiện có.
+          </div>
+        </div>
+
         <div>
           <div class="sec-title" style="margin-bottom:8px">Đơn đã lưu</div>
           <!-- Search box -->
@@ -1410,6 +1431,61 @@ function filterSavedList(q) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
       </button>
     </div>`).join('');
+}
+
+/* ══ EXPORT / IMPORT ══ */
+function exportOrders() {
+  const list = getSaved();
+  if (!list.length) { toast('Chưa có đơn nào để xuất', 'error'); return; }
+  const payload = {
+    _app: 'TrungSonPharma-Quotation',
+    _version: 1,
+    _exportedAt: new Date().toISOString(),
+    _count: list.length,
+    orders: list
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tsp-don-hang-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Đã xuất ${list.length} đơn hàng ✅`, 'success');
+}
+
+function importOrders(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = ''; // reset để có thể chọn lại cùng file
+  const fr = new FileReader();
+  fr.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // Hỗ trợ cả 2 format: wrapped {orders:[]} hoặc array thẳng []
+      const incoming = Array.isArray(data) ? data : (data.orders || []);
+      if (!incoming.length) { toast('File không có đơn hàng nào', 'error'); return; }
+      const existing = getSaved();
+      const existingIds = new Set(existing.map(o => o.id));
+      let added = 0, skipped = 0;
+      incoming.forEach(o => {
+        if (!o.id || !Array.isArray(o.cart)) { skipped++; return; }
+        if (existingIds.has(o.id)) { skipped++; }
+        else { existing.unshift(o); existingIds.add(o.id); added++; }
+      });
+      setSaved(existing);
+      refreshSavedUI();
+      renderSavedModal();
+      if (added > 0 && skipped === 0)
+        toast(`✅ Đã nhập ${added} đơn thành công`, 'success');
+      else if (added > 0)
+        toast(`✅ Nhập ${added} đơn mới · Bỏ qua ${skipped} đơn trùng`, 'success');
+      else
+        toast(`Tất cả ${skipped} đơn đã tồn tại, không có gì mới`, 'info');
+    } catch {
+      toast('File không hợp lệ — vui lòng chọn file .json đã xuất từ hệ thống', 'error');
+    }
+  };
+  fr.readAsText(file);
 }
 
 /* ══ PRINT ══ */
