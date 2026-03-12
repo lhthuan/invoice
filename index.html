@@ -727,20 +727,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="sum-row"><span class="sum-label">Giảm giá trực tiếp</span><span class="sum-val neg" id="qcDiscDirect">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá voucher</span><span class="sum-val neg" id="qcDiscVoucher">0 ₫</span></div>
           </div>
-          <div class="sum-total-row">
-            <span class="sum-total-label">Thành tiền</span>
-            <span class="sum-total-val" id="qcTotal">0 ₫</span>
-          </div>
-          <div class="sum-ship-ref" id="qcShipRefRow" style="display:none">
-            <span class="sum-ship-ref-label">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-              Phí vận chuyển tham khảo (khách tự thanh toán cho đơn vị vận chuyển)
-            </span>
-            <span class="sum-ship-ref-val" id="qcShipRef">—</span>
-          </div>
-        </div>
-
-        <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
+            <!-- Footer: chỉ hiển thị thanh toán; Care Point tạm ẩn -->
         <div class="qc-footer" style="grid-template-columns:1fr">
           <div class="qcf-cell" style="border-right:none">
             <div class="qcf-icon pm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
@@ -755,6 +742,20 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           <div class="qc-note-text" id="qcNoteText"></div>
         </div>
 
+          <div class="sum-total-row">
+            <span class="sum-total-label">Thành tiền</span>
+            <span class="sum-total-val" id="qcTotal">0 ₫</span>
+          </div>
+          <div class="sum-ship-ref" id="qcShipRefRow" style="display:none">
+            <span class="sum-ship-ref-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              Phí vận chuyển tham khảo (khách tự thanh toán cho đơn vị vận chuyển)
+            </span>
+            <span class="sum-ship-ref-val" id="qcShipRef">—</span>
+          </div>
+        </div>
+
+      
         <!-- Thank you footer -->
         <div class="qc-thankyou">
           <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
