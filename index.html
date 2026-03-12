@@ -510,6 +510,58 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         </div>
       </div>
 
+      <!-- Nhập sản phẩm thủ công -->
+      <div class="section">
+        <div class="sec-title" style="justify-content:space-between;cursor:pointer" onclick="toggleManualSection()">
+          <span style="display:flex;align-items:center;gap:6px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Nhập sản phẩm thủ công
+          </span>
+          <svg id="manualChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="manualSection" style="display:none">
+          <div style="background:var(--amber-light);border:1px dashed #f59e0b;border-radius:var(--r-sm);padding:8px 11px;font-size:11.5px;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Dùng khi mất kết nối hoặc sản phẩm không có trên hệ thống
+          </div>
+          <div class="form-grid" style="gap:8px">
+            <div class="field">
+              <div class="field-label">Tên sản phẩm <span style="color:var(--red)">*</span></div>
+              <input type="text" id="manualName" placeholder="Nhập tên sản phẩm...">
+            </div>
+            <div class="form-grid g2" style="gap:7px">
+              <div class="field">
+                <div class="field-label">Mã SKU <span style="font-weight:400;color:var(--text-3)">(tuỳ chọn)</span></div>
+                <input type="text" id="manualSKU" placeholder="VD: 123456" style="font-family:var(--mono)">
+              </div>
+              <div class="field">
+                <div class="field-label">Đơn vị tính</div>
+                <input type="text" id="manualUnit" value="Sp" placeholder="Hộp, Chai, Viên...">
+              </div>
+            </div>
+            <div class="form-grid g2" style="gap:7px">
+              <div class="field">
+                <div class="field-label">Đơn giá (₫)</div>
+                <input type="number" id="manualPrice" value="0" min="0" step="500" style="font-family:var(--mono);font-weight:700">
+              </div>
+              <div class="field">
+                <div class="field-label">Số lượng</div>
+                <input type="number" id="manualQty" value="1" min="1">
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px">
+              <label class="promo-toggle" style="font-size:12px">
+                <input type="checkbox" id="manualIsPromo"> 🎁 Hàng khuyến mãi (giá = 0)
+              </label>
+            </div>
+            <button class="btn btn-amber" style="width:100%;justify-content:center;margin-top:2px" onclick="addManualProduct()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Thêm vào đơn
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Giảm giá & Ghi chú -->
       <div class="section">
         <div class="sec-title">
@@ -918,6 +970,37 @@ function addManualPromo() {
   document.getElementById('promoQty').value  = 1;
   renderPreview();
   toast('🎁 Đã thêm KM: ' + name, 'success');
+}
+
+/* ══ NHẬP SẢN PHẨM THỦ CÔNG ══ */
+function toggleManualSection() {
+  const sec = document.getElementById('manualSection');
+  const chv = document.getElementById('manualChevron');
+  const open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  chv.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+function addManualProduct() {
+  const name  = document.getElementById('manualName').value.trim();
+  if (!name) { toast('Vui lòng nhập tên sản phẩm', 'error'); document.getElementById('manualName').focus(); return; }
+  const isPromo = document.getElementById('manualIsPromo').checked;
+  const sku   = document.getElementById('manualSKU').value.trim();
+  const unit  = document.getElementById('manualUnit').value.trim() || 'Sp';
+  const price = isPromo ? 0 : (parseFloat(document.getElementById('manualPrice').value) || 0);
+  const qty   = Math.max(1, parseInt(document.getElementById('manualQty').value) || 1);
+
+  cart.push({ sku, name, price, qty, unit, img: '', _rawImg: '', promo: isPromo });
+  toast(isPromo ? `🎁 KM: ${name}` : `Đã thêm: ${name}`, 'success');
+  renderPreview();
+
+  // Reset form nhưng giữ đơn vị
+  document.getElementById('manualName').value  = '';
+  document.getElementById('manualSKU').value   = '';
+  document.getElementById('manualPrice').value = 0;
+  document.getElementById('manualQty').value   = 1;
+  document.getElementById('manualIsPromo').checked = false;
+  document.getElementById('manualName').focus();
 }
 
 /* ══ COPY SENDER ══ */
