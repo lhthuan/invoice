@@ -191,9 +191,10 @@ table.qt tbody tr.promo-row:hover td{background:#fae8ff}
 .qt-stt{font-family:var(--mono);font-size:12px;color:var(--text-3);font-weight:600;width:28px}
 .qt-price{font-family:var(--mono);font-size:12px;color:var(--text-2)}
 .qt-price.free{color:var(--pink);font-weight:700}
-.qt-qty-cell{white-space:nowrap;text-align:center!important}
-.qt-qty-input{width:50px;text-align:center;padding:3px 5px;font-family:var(--mono);font-size:12px;font-weight:700;border:1.5px solid var(--border);border-radius:6px;background:#fff}
-.qt-unit{font-size:10.5px;color:var(--text-3);margin-left:3px}
+.qt-qty-cell{text-align:center!important}
+.qt-qty-wrap{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
+.qt-qty-input{width:48px;text-align:center;padding:3px 4px;font-family:var(--mono);font-size:12px;font-weight:700;border:1.5px solid var(--border);border-radius:6px;background:#fff}
+.qt-unit{font-size:10px;color:var(--text-3);white-space:nowrap}
 .qt-total{font-family:var(--mono);font-size:13px;font-weight:700}
 .qt-total.free-total{color:var(--pink);font-weight:800}
 .qt-del-btn{background:none;border:none;cursor:pointer;color:var(--red);padding:4px;border-radius:4px;opacity:0;transition:all .15s;display:flex}
@@ -581,8 +582,8 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
           <div class="form-grid g2">
             <div class="field">
-              <div class="field-label">Care Point tặng khách</div>
-              <input type="number" id="carePoint" value="0" min="0" step="1" oninput="renderPreview()" placeholder="Nhập số điểm...">
+              <div class="field-label">Dùng điểm Care Point (₫)</div>
+              <input type="number" id="carePointPay" value="0" min="0" step="1000" oninput="renderPreview()" placeholder="Số tiền trừ điểm...">
             </div>
             <div class="field">
               <div class="field-label">Phí vận chuyển tham khảo (₫)</div>
@@ -679,8 +680,11 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
           </div>
         </div>
         <div class="qc-addr">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          <div><strong>Giao tại:</strong> <span id="qcAddress">—</span> &nbsp;•&nbsp; <strong>Dự kiến:</strong> <span id="qcDelivery">—</span></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px;flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <div><strong>Giao tại:</strong> <span id="qcAddress">—</span></div>
+            <div><strong>Dự kiến:</strong> <span id="qcDelivery">—</span></div>
+          </div>
         </div>
 
         <!-- Notice block -->
@@ -726,7 +730,15 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
             <div class="sum-row"><span class="sum-label">Tổng tiền ban đầu</span><span class="sum-val" id="qcSubtotal">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá trực tiếp</span><span class="sum-val neg" id="qcDiscDirect">0 ₫</span></div>
             <div class="sum-row"><span class="sum-label">Giảm giá voucher</span><span class="sum-val neg" id="qcDiscVoucher">0 ₫</span></div>
-            <!-- Phương thức thanh toán — nằm giữa giảm giá và thành tiền -->
+            <!-- Trừ điểm Care Point -->
+            <div class="sum-row" id="qcCarePointRow" style="display:none">
+              <span class="sum-label" style="display:flex;align-items:center;gap:5px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;color:var(--orange)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Trừ điểm Care Point
+              </span>
+              <span class="sum-val neg" id="qcCarePointVal">0 ₫</span>
+            </div>
+            <!-- Phương thức thanh toán -->
             <div class="sum-row" style="padding:8px 0 2px;border-top:1px dashed var(--border-light);margin-top:4px">
               <span class="sum-label" style="display:flex;align-items:center;gap:6px">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;color:var(--blue)"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
@@ -757,7 +769,7 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         <!-- Thank you footer -->
         <div class="qc-thankyou">
           <div class="qc-thankyou-title">Cảm ơn Quý khách đã tin tưởng!</div>
-          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi. Hy vọng sản phẩm từ <strong>Trung Sơn Care</strong> chăm sóc tốt sức khỏe gia đình bạn.</div>
+          <div class="qc-thankyou-sub">Sự hài lòng của bạn là niềm hạnh phúc của chúng tôi.<br>Hy vọng sản phẩm từ <strong>Trung Sơn Care</strong> chăm sóc tốt sức khỏe gia đình bạn.</div>
           <hr class="qc-thankyou-divider">
           <div class="qc-contact-row">
             <div class="qc-contact-cell">
@@ -1091,8 +1103,10 @@ function renderPreview() {
         </div></td>
         <td class="qt-price${p.promo?' free':''}">${p.promo?'Miễn phí':fmt(p.price)+' ₫'}</td>
         <td class="qt-qty-cell">
-          <input class="qt-qty-input" type="number" value="${p.qty}" min="1" onchange="updateQty(${i},this.value)">
-          <span class="qt-unit">${p.unit}</span>
+          <div class="qt-qty-wrap">
+            <input class="qt-qty-input" type="number" value="${p.qty}" min="1" onchange="updateQty(${i},this.value)">
+            <span class="qt-unit">${p.unit}</span>
+          </div>
         </td>
         <td class="qt-total${p.promo?' free-total':''}">${p.promo?'0 ₫':fmt(p.price*p.qty)+' ₫'}</td>
         <td><button class="qt-del-btn" onclick="removeItem(${i})">
@@ -1108,14 +1122,22 @@ function renderPreview() {
   const dd2   = parseFloat(val('discountDirect'))||0;
   const dv    = parseFloat(val('discountVoucher'))||0;
   const sf    = parseFloat(val('shipFee'))||0;
-  const total = Math.max(0, sub - dd2 - dv);
-  const pts   = parseInt(val('carePoint')) || 0;
+  const cpp   = parseFloat(val('carePointPay'))||0;   // Trừ điểm Care Point (₫)
+  const total = Math.max(0, sub - dd2 - dv - cpp);
 
   g('qcSubtotal').textContent    = fmt(sub) + ' ₫';
   g('qcDiscDirect').textContent  = dd2 > 0 ? '-' + fmt(dd2) + ' ₫' : '0 ₫';
   g('qcDiscVoucher').textContent = dv  > 0 ? '-' + fmt(dv)  + ' ₫' : '0 ₫';
   g('qcTotal').textContent       = fmt(total) + ' ₫';
-  g('qcPoints').textContent      = pts > 0 ? '+ ' + fmt(pts) + ' điểm' : '—';
+
+  // Hiện/ẩn dòng Care Point
+  const cpRow = g('qcCarePointRow');
+  if (cpp > 0) {
+    cpRow.style.display = 'flex';
+    g('qcCarePointVal').textContent = '-' + fmt(cpp) + ' ₫';
+  } else {
+    cpRow.style.display = 'none';
+  }
 
   const shipRow = g('qcShipRefRow');
   if (sf > 0) { shipRow.style.display='flex'; g('qcShipRef').textContent='~'+fmt(sf)+' ₫'; }
@@ -1140,7 +1162,7 @@ function newOrder(){
   document.getElementById('discountDirect').value=0;
   document.getElementById('discountVoucher').value=0;
   document.getElementById('shipFee').value=0;
-  document.getElementById('carePoint').value=0;
+  document.getElementById('carePointPay').value=0;
   selectedNotice = 0;
   NOTICES.forEach((_,i)=>{ const p=document.getElementById('noticePill'+i); if(p) p.classList.toggle('active', i===0); });
   document.getElementById('skuResult').classList.remove('show');
@@ -1313,7 +1335,7 @@ function getSnapshot(){
       address:v('address'),deliveryDate:v('deliveryDate'),
       paymentMethod:v('paymentMethod'),
       discountDirect:dd,discountVoucher:dv,shipFee:sf,
-      carePoint:parseInt(v('carePoint'))||0,
+      carePointPay:parseFloat(v('carePointPay'))||0,
       orderNote:v('orderNote')
     }
   };
@@ -1355,7 +1377,7 @@ function loadOrder(idx){
   set('address',f.address);set('deliveryDate',f.deliveryDate);
   document.getElementById('paymentMethod').value=f.paymentMethod||'Tiền mặt';
   set('discountDirect',f.discountDirect||0);set('discountVoucher',f.discountVoucher||0);
-  set('shipFee',f.shipFee||0);set('carePoint',f.carePoint||0);
+  set('shipFee',f.shipFee||0);set('carePointPay',f.carePointPay||0);
   set('orderNote',f.orderNote);
   renderPreview();closeSaveModal();toast('Đã tải đơn: '+o.name,'success');
 }
