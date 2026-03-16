@@ -304,6 +304,132 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
   .pr-scroll{padding:0!important}
   body{background:#fff!important}
 }
+
+/* ══ MOBILE ══ */
+@media(max-width:768px){
+  /* Topbar gọn */
+  .topbar{height:48px;padding:0 12px}
+  .brand-icon img{height:28px}
+  .topbar-actions{gap:5px}
+  .topbar-actions .btn{padding:5px 9px;font-size:11.5px;gap:3px}
+  .topbar-actions .btn span.btn-label{display:none} /* ẩn text, giữ icon */
+
+  /* Layout: stack dọc, dùng tab */
+  .app{display:flex;flex-direction:column;height:calc(100vh - 48px);overflow:hidden;position:relative}
+
+  /* Tab bar */
+  .mob-tabs{display:flex;background:#fff;border-bottom:2px solid var(--border-light);flex-shrink:0;position:sticky;top:0;z-index:100}
+  .mob-tab{flex:1;padding:11px 6px;text-align:center;font-size:12px;font-weight:700;color:var(--text-3);cursor:pointer;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-2px;display:flex;align-items:center;justify-content:center;gap:5px;user-select:none}
+  .mob-tab svg{width:14px;height:14px;flex-shrink:0}
+  .mob-tab.active{color:var(--green);border-bottom-color:var(--green)}
+
+  /* Panels: full height, switch via class */
+  .panel-left,.panel-right{width:100%;border-right:none;flex:1;overflow:hidden;display:none;flex-direction:column}
+  .panel-left.mob-active,.panel-right.mob-active{display:flex}
+
+  /* Ẩn toolbar desktop của panel-right */
+  .pr-toolbar{display:none}
+
+  /* pr-scroll padding nhỏ hơn trên mobile */
+  .pr-scroll{padding:12px}
+
+  /* Quote card full width */
+  .quote-card{max-width:100%;margin:0}
+
+  /* Inputs lớn hơn để dễ tap */
+  input[type=text],input[type=date],input[type=number],select,textarea{
+    padding:10px 12px;font-size:14px;border-radius:8px
+  }
+  .btn{padding:9px 14px;font-size:13px}
+  .btn-sm{padding:8px 12px;font-size:12.5px}
+
+  /* Section padding */
+  .section{padding:14px 14px}
+
+  /* Grid 2 col → 1 col trên mobile nhỏ */
+  .g2{grid-template-columns:1fr 1fr} /* giữ 2 col ở 768, break ở 480 */
+
+  /* SKU add row wrap */
+  .sku-add-row{flex-wrap:wrap;gap:8px}
+  .sku-add-row .btn{flex:1;justify-content:center}
+
+  /* Bảng sản phẩm: scroll ngang */
+  .qc-table-wrap{padding:10px 14px;overflow-x:auto}
+  table.qt{min-width:480px}
+
+  /* Summary padding */
+  .qc-summary{padding:12px 14px}
+  .qc-info-col{padding:10px 14px}
+  .qc-addr{padding:8px 14px}
+  .qc-notice{padding:8px 14px 12px}
+  .qc-table-wrap{padding:10px 14px}
+  .qc-thankyou{padding:10px 14px 0}
+  .qc-note{padding:8px 14px 12px}
+
+  /* Bottom action bar cố định khi ở tab Nhập đơn */
+  .mob-bottom-bar{display:flex;gap:8px;padding:10px 14px;background:#fff;border-top:1px solid var(--border);flex-shrink:0;position:sticky;bottom:0;z-index:50}
+  .mob-bottom-bar .btn{flex:1;justify-content:center;font-size:13px}
+
+  /* Toast căn giữa-dưới trên mobile */
+  .toast-wrap{bottom:72px;right:12px;left:12px;align-items:center}
+  .toast{max-width:100%;width:100%;justify-content:center}
+
+  /* Modal full-screen trên mobile */
+  .modal{width:100%;max-height:95vh;border-radius:var(--r-lg) var(--r-lg) 0 0;position:fixed;bottom:0;left:0;right:0}
+  .modal-overlay{align-items:flex-end}
+
+  /* Saved item dễ tap */
+  .saved-item{padding:11px 13px}
+  .saved-del{opacity:1!important} /* luôn hiện nút xoá trên mobile */
+
+  /* Notice pills wrap tốt hơn */
+  .notice-pills{gap:7px}
+  .notice-pill{padding:7px 13px;font-size:12.5px}
+
+  /* Sec title không cần uppercase nhỏ */
+  .sec-title{font-size:11px;letter-spacing:.7px;margin-bottom:10px}
+
+  /* Quote card header nhỏ lại */
+  .qc-header{min-height:64px!important;padding-left:80px!important}
+  .qc-header img[alt="Bác sĩ gấu"]{height:84px!important}
+  .qc-brand-logo img{max-width:130px!important}
+  .qc-doc-id{font-size:13px!important}
+  .qc-doc-title{font-size:9px!important}
+
+  /* Info 2 col giữ nguyên, chỉ nhỏ padding */
+  .qc-info-col{padding:9px 14px}
+
+  /* Summary total font size nhỏ hơn xíu */
+  .sum-total-val{font-size:18px}
+}
+
+@media(max-width:480px){
+  /* 2 col → 1 col hoàn toàn */
+  .g2{grid-template-columns:1fr}
+
+  /* SKU price row stack */
+  .sku-price-row{flex-wrap:wrap;gap:5px}
+  .sku-price-input{width:100%}
+
+  /* Info grid stack */
+  .qc-info{grid-template-columns:1fr}
+  .qc-info-col:first-child{border-right:none;border-bottom:1px solid var(--border-light)}
+
+  /* Contact row stack */
+  .qc-contact-row{flex-direction:column;gap:0}
+  .qc-contact-cell{border-right:none;border-bottom:1px solid var(--border-light);padding:6px 14px;justify-content:center}
+  .qc-contact-cell:last-child{border-bottom:none}
+
+  /* Topbar: ẩn brand text */
+  .topbar-actions{gap:4px}
+}
+
+/* Desktop: ẩn mobile-only elements */
+@media(min-width:769px){
+  .mob-tabs{display:none}
+  .mob-bottom-bar{display:none}
+  .panel-left,.panel-right{display:flex!important}
+}
 </style>
 </head>
 <body>
@@ -319,31 +445,44 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
   <div class="topbar-actions">
     <button class="btn btn-ghost" onclick="newOrder()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Đơn mới
+      <span class="btn-label">Đơn mới</span>
     </button>
     <button class="btn btn-ghost" onclick="openSaveModal()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      Quản lý đơn
+      <span class="btn-label">Quản lý đơn</span>
     </button>
     <button class="btn btn-ghost" id="btnExportImg" onclick="exportImage('download')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Xuất JPG
+      <span class="btn-label">Xuất JPG</span>
     </button>
     <button class="btn btn-ghost" id="btnCopyImg" onclick="exportImage('clipboard')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-      Copy ảnh
+      <span class="btn-label">Copy ảnh</span>
     </button>
     <button class="btn btn-white" onclick="printQuote()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-      In / PDF
+      <span class="btn-label">In / PDF</span>
     </button>
   </div>
 </div>
 
 <div class="app">
 
+  <!-- MOBILE TAB BAR -->
+  <div class="mob-tabs" id="mobTabs">
+    <div class="mob-tab active" id="tabForm" onclick="switchTab('form')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z"/></svg>
+      Nhập đơn
+    </div>
+    <div class="mob-tab" id="tabPreview" onclick="switchTab('preview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      Xem trước
+      <span id="mobProdBadge" style="display:none;background:var(--orange);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:20px;margin-left:2px" id="mobBadge">0</span>
+    </div>
+  </div>
+
   <!-- LEFT PANEL -->
-  <div class="panel-left">
+  <div class="panel-left mob-active" id="panelLeft">
     <div class="pl-scroll">
 
       <!-- Thông tin đơn hàng -->
@@ -612,10 +751,25 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
       </div>
 
     </div>
+    <!-- Mobile bottom action bar -->
+    <div class="mob-bottom-bar">
+      <button class="btn btn-outline" onclick="clearCart()" style="color:var(--red);border-color:var(--red)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        Xoá đơn
+      </button>
+      <button class="btn btn-green" onclick="saveCurrentOrder()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Lưu
+      </button>
+      <button class="btn btn-amber" onclick="switchTab('preview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Xem trước
+      </button>
+    </div>
   </div>
 
   <!-- RIGHT PANEL -->
-  <div class="panel-right">
+  <div class="panel-right" id="panelRight">
     <div class="pr-toolbar">
       <div class="pr-title">Xem trước báo giá <span id="previewId">—</span></div>
       <div style="display:flex;gap:7px;align-items:center">
@@ -1117,6 +1271,9 @@ function renderPreview() {
 
   g('qcProdCount').textContent   = cart.length;
   g('prodCountChip').textContent = cart.length + ' sản phẩm';
+  // Cập nhật badge mobile tab
+  const badge = document.getElementById('mobProdBadge');
+  if (badge) { badge.textContent = cart.length; badge.style.display = cart.length ? 'inline' : 'none'; }
 
   const sub   = cart.reduce((s,p) => s + (p.promo ? 0 : p.price*p.qty), 0);
   const dd2   = parseFloat(val('discountDirect'))||0;
@@ -1527,6 +1684,26 @@ function toast(msg,type='info'){
   t.innerHTML=icons[type]+msg;
   document.getElementById('toastWrap').appendChild(t);
   setTimeout(()=>t.remove(),3500);
+}
+
+/* ══ MOBILE TAB SWITCH ══ */
+function switchTab(tab) {
+  const pLeft  = document.getElementById('panelLeft');
+  const pRight = document.getElementById('panelRight');
+  const tForm  = document.getElementById('tabForm');
+  const tPrev  = document.getElementById('tabPreview');
+  const tabs   = document.getElementById('mobTabs');
+  if (!tabs || window.innerWidth > 768) return;
+  if (tab === 'form') {
+    pLeft.classList.add('mob-active');  pRight.classList.remove('mob-active');
+    tForm.classList.add('active');      tPrev.classList.remove('active');
+  } else {
+    pRight.classList.add('mob-active'); pLeft.classList.remove('mob-active');
+    tPrev.classList.add('active');      tForm.classList.remove('active');
+    // Scroll về đầu preview khi switch
+    const scroll = pRight.querySelector('.pr-scroll');
+    if (scroll) scroll.scrollTop = 0;
+  }
 }
 
 /* ══ INIT ══ */
