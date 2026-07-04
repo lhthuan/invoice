@@ -2486,23 +2486,36 @@ function switchPLTab(tab) {
 function clearCart(){ if(!cart.length)return; if(!confirm('Xoá toàn bộ giỏ hàng?'))return; cart=[]; _hasUnsavedChanges=false; renderPreview(); toast('Đã xoá giỏ hàng','info'); }
 
 /* ══ ORDER ID ══ */
-function makeECMId() {
+async function makeECMId() {
   const now = new Date();
   const yy = String(now.getFullYear()).slice(2);
   const mm = String(now.getMonth()+1).padStart(2,'0');
   const dd = String(now.getDate()).padStart(2,'0');
   const dateStr = yy+mm+dd;
+  const prefix = `ECM${dateStr}-`;
+  const sb = getSb();
+  if (sb) {
+    try {
+      const { data } = await sb.from('orders').select('id').like('id',`${prefix}%`).order('id',{ascending:false}).limit(1);
+      if (data && data.length > 0) {
+        const lastN = parseInt(data[0].id.replace(prefix,'')) || 0;
+        return `${prefix}${String(lastN+1).padStart(3,'0')}`;
+      }
+      return `${prefix}001`;
+    } catch(e) { /* fall through to localStorage */ }
+  }
   const s = JSON.parse(localStorage.getItem('tsp_ecm_ctr')||'{}');
   const n = s.date===dateStr ? (s.n||0)+1 : 1;
-  localStorage.setItem('tsp_ecm_ctr', JSON.stringify({date:dateStr, n}));
-  return `ECM${dateStr}-${String(n).padStart(3,'0')}`;
+  localStorage.setItem('tsp_ecm_ctr', JSON.stringify({date:dateStr,n}));
+  return `${prefix}${String(n).padStart(3,'0')}`;
 }
 let _isNewOrder = true;
-let orderId = makeECMId();
+let orderId = '…';
+(async()=>{ orderId=await makeECMId(); renderPreview(); })();
 
-function newOrder(){
+async function newOrder(){
   if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
-  cart=[]; orderId=makeECMId(); _isNewOrder=true; _orderCreatedAt=new Date().toISOString(); _orderSavedAt='';
+  cart=[]; orderId='…'; _isNewOrder=true; _orderCreatedAt=new Date().toISOString(); _orderSavedAt='';
   ['senderName','senderPhone','receiverName','receiverPhone','address','orderNote']
     .forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('deliveryDate').value=new Date(Date.now()+2*86400000).toISOString().split('T')[0];
@@ -2522,8 +2535,9 @@ function newOrder(){
     const empEl = document.getElementById('empSelect'); if (empEl) empEl.value = lastEmp;
   }
   switchPLTab('LapDon');
-  renderPreview(); renderTrackCurrentOrder(); toast('Đơn mới: '+orderId,'success');
+  renderPreview(); renderTrackCurrentOrder();
   setTimeout(()=>{ const ta=document.getElementById('customerRaw'); if(ta){ta.focus();ta.select();} },100);
+  orderId=await makeECMId(); renderPreview(); toast('Đơn mới: '+orderId,'success');
 }
 
 /* ══ SAVE / LOAD ══ */
@@ -2589,13 +2603,25 @@ async function saveOrder(){
 }
 
 async function _persistOrder(snap) {
+  // Supabase conflict check: nếu là đơn mới và ID đã bị phiên khác lưu trước → đổi ID
+  const sb = getSb();
+  if (sb && _isNewOrder) {
+    try {
+      const { data: existing } = await sb.from('orders').select('form').eq('id', snap.id).maybeSingle();
+      if (existing && existing.form?._createdAt !== snap.createdAt) {
+        const oldId = snap.id;
+        snap.id = await makeECMId();
+        orderId = snap.id;
+        toast(`Mã ${oldId} đã bị phiên khác dùng → đổi sang ${snap.id}`, 'warning');
+      }
+    } catch(e) { /* tiếp tục với id hiện tại */ }
+  }
   // localStorage
   const list = getSaved();
   const idx = list.findIndex(o => o.id === snap.id);
   if (idx >= 0) list[idx] = snap; else list.unshift(snap);
   setSaved(list);
   // Supabase
-  const sb = getSb();
   if (sb) {
     const { error } = await sb.from('orders').upsert({
       id: snap.id, name: snap.name,
