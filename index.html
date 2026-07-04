@@ -2494,25 +2494,18 @@ async function makeECMId() {
   const dateStr = yy+mm+dd;
   const prefix = `ECM${dateStr}-`;
   const sb = getSb();
-  if (sb) {
-    try {
-      const { data, error } = await sb.from('orders').select('id').like('id',`${prefix}%`).order('id',{ascending:false}).limit(1);
-      if (error) throw error;
-      if (data && data.length > 0) {
-        const lastN = parseInt(data[0].id.replace(prefix,'')) || 0;
-        return `${prefix}${String(lastN+1).padStart(3,'0')}`;
-      }
-      return `${prefix}001`;
-    } catch(e) { console.warn('makeECMId fallback:', e?.message||e); }
+  if (!sb) { toast('Không thể cấp mã: chưa kết nối Supabase', 'error'); return null; }
+  const { data, error } = await sb.from('orders').select('id').like('id',`${prefix}%`).order('id',{ascending:false}).limit(1);
+  if (error) { toast('Không thể cấp mã: ' + error.message, 'error'); return null; }
+  if (data && data.length > 0) {
+    const lastN = parseInt(data[0].id.replace(prefix,'')) || 0;
+    return `${prefix}${String(lastN+1).padStart(3,'0')}`;
   }
-  const s = JSON.parse(localStorage.getItem('tsp_ecm_ctr')||'{}');
-  const n = s.date===dateStr ? (s.n||0)+1 : 1;
-  localStorage.setItem('tsp_ecm_ctr', JSON.stringify({date:dateStr,n}));
-  return `${prefix}${String(n).padStart(3,'0')}`;
+  return `${prefix}001`;
 }
 let _isNewOrder = true;
 let orderId = '…';
-window.addEventListener('DOMContentLoaded', async()=>{ orderId=await makeECMId(); renderPreview(); });
+window.addEventListener('DOMContentLoaded', async()=>{ const id=await makeECMId(); if(id){ orderId=id; renderPreview(); } });
 
 async function newOrder(){
   if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
@@ -2538,7 +2531,7 @@ async function newOrder(){
   switchPLTab('LapDon');
   renderPreview(); renderTrackCurrentOrder();
   setTimeout(()=>{ const ta=document.getElementById('customerRaw'); if(ta){ta.focus();ta.select();} },100);
-  orderId=await makeECMId(); renderPreview(); toast('Đơn mới: '+orderId,'success');
+  const newId=await makeECMId(); if(!newId) return; orderId=newId; renderPreview(); toast('Đơn mới: '+orderId,'success');
 }
 
 /* ══ SAVE / LOAD ══ */
@@ -2611,9 +2604,10 @@ async function _persistOrder(snap) {
       const { data: existing } = await sb.from('orders').select('form').eq('id', snap.id).maybeSingle();
       if (existing && existing.form?._createdAt !== snap.createdAt) {
         const oldId = snap.id;
-        snap.id = await makeECMId();
-        orderId = snap.id;
-        toast(`Mã ${oldId} đã bị phiên khác dùng → đổi sang ${snap.id}`, 'warning');
+        const newId = await makeECMId();
+        if (!newId) return;
+        snap.id = newId; orderId = newId;
+        toast(`Mã ${oldId} đã bị phiên khác dùng → đổi sang ${newId}`, 'warning');
       }
     } catch(e) { /* tiếp tục với id hiện tại */ }
   }
