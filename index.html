@@ -2597,42 +2597,43 @@ async function saveOrder(){
 }
 
 async function _persistOrder(snap) {
-  // Supabase conflict check: nếu là đơn mới và ID đã bị phiên khác lưu trước → đổi ID
   const sb = getSb();
+  const payload = () => ({
+    id: snap.id, name: snap.name,
+    saved_at: snap.savedAt, total: snap.total,
+    cart: snap.cart, form: {...snap.form, _createdAt: snap.createdAt},
+    selected_notice: snap.selectedNotice,
+    created_by: snap.created_by || null,
+    status: snap.status || 'quoted',
+    erp_code: snap.erp_code || '',
+    pharmacy_id: snap.pharmacy_id || null,
+    tracking_code: snap.tracking_code || '',
+    shipping_provider_id: snap.shipping_provider_id || null,
+    status_timestamps: snap.status_timestamps || {}
+  });
+
   if (sb && _isNewOrder) {
-    try {
-      const { data: existing } = await sb.from('orders').select('form').eq('id', snap.id).maybeSingle();
-      if (existing && existing.form?._createdAt !== snap.createdAt) {
-        const oldId = snap.id;
-        const newId = await makeECMId();
-        if (!newId) return;
-        snap.id = newId; orderId = newId;
-        toast(`Mã ${oldId} đã bị phiên khác dùng → đổi sang ${newId}`, 'warning');
-      }
-    } catch(e) { /* tiếp tục với id hiện tại */ }
+    // INSERT thay vì upsert: Supabase trả lỗi 23505 nếu ID đã tồn tại (tab khác lưu trước)
+    let { error } = await sb.from('orders').insert(payload());
+    if (error?.code === '23505') {
+      const oldId = snap.id;
+      const newId = await makeECMId();
+      if (!newId) return;
+      snap.id = newId; orderId = newId;
+      toast(`Mã ${oldId} đã bị phiên khác dùng → đổi sang ${newId}`, 'warning');
+      ({ error } = await sb.from('orders').insert(payload()));
+    }
+    if (error) { toast('Supabase: ' + error.message, 'error'); return; }
+  } else if (sb) {
+    const { error } = await sb.from('orders').upsert(payload());
+    if (error) { toast('Supabase: ' + error.message, 'error'); return; }
   }
-  // localStorage
+
+  // Cập nhật localStorage sau khi Supabase thành công
   const list = getSaved();
   const idx = list.findIndex(o => o.id === snap.id);
   if (idx >= 0) list[idx] = snap; else list.unshift(snap);
   setSaved(list);
-  // Supabase
-  if (sb) {
-    const { error } = await sb.from('orders').upsert({
-      id: snap.id, name: snap.name,
-      saved_at: snap.savedAt, total: snap.total,
-      cart: snap.cart, form: {...snap.form, _createdAt: snap.createdAt},
-      selected_notice: snap.selectedNotice,
-      created_by: snap.created_by || null,
-      status: snap.status || 'quoted',
-      erp_code: snap.erp_code || '',
-      pharmacy_id: snap.pharmacy_id || null,
-      tracking_code: snap.tracking_code || '',
-      shipping_provider_id: snap.shipping_provider_id || null,
-      status_timestamps: snap.status_timestamps || {}
-    });
-    if (error) toast('Supabase: ' + error.message, 'error');
-  }
 }
 
 window._savedOrders = [];
