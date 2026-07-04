@@ -2496,13 +2496,14 @@ async function makeECMId() {
   const sb = getSb();
   if (sb) {
     try {
-      const { data } = await sb.from('orders').select('id').like('id',`${prefix}%`).order('id',{ascending:false}).limit(1);
+      const { data, error } = await sb.from('orders').select('id').like('id',`${prefix}%`).order('id',{ascending:false}).limit(1);
+      if (error) throw error;
       if (data && data.length > 0) {
         const lastN = parseInt(data[0].id.replace(prefix,'')) || 0;
         return `${prefix}${String(lastN+1).padStart(3,'0')}`;
       }
       return `${prefix}001`;
-    } catch(e) { /* fall through to localStorage */ }
+    } catch(e) { console.warn('makeECMId fallback:', e?.message||e); }
   }
   const s = JSON.parse(localStorage.getItem('tsp_ecm_ctr')||'{}');
   const n = s.date===dateStr ? (s.n||0)+1 : 1;
@@ -2511,7 +2512,7 @@ async function makeECMId() {
 }
 let _isNewOrder = true;
 let orderId = '…';
-(async()=>{ orderId=await makeECMId(); renderPreview(); })();
+window.addEventListener('DOMContentLoaded', async()=>{ orderId=await makeECMId(); renderPreview(); });
 
 async function newOrder(){
   if(cart.length && !confirm('Tạo đơn mới sẽ xoá đơn hiện tại?'))return;
