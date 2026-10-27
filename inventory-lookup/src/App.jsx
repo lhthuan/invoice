@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
-import { initStockSync, loadCached, syncIfStale, uploadStock, subscribe } from "./stockSync.js";
+import { initStockSync, loadCached, syncIfStale, uploadStock, subscribe, contentHashOfRows } from "./stockSync.js";
 import { analyzeWorkbook, normHeader } from "./excelParse.js";
 
 // ─── BUILD INFO ──────────────────────────────────────────────────────────────
 const BUILD_DATE = new Date(__BUILD_TIME__).toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", timeZone:"Asia/Ho_Chi_Minh" });
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 
 // ─── COLORS (Light ERP Theme) ─────────────────────────────────────────────────
 const C = {
@@ -342,23 +342,21 @@ function ProgressBar({ value, max, color=C.accent }) {
 }
 
 // ─── PRODUCT SEARCH AUTOCOMPLETE ─────────────────────────────────────────────
-function ProductSearch({ rows, addedCodes, onAdd }) {
+// Bỏ dấu tiếng Việt để tìm "vien" ra "Viên", "duong" ra "Đường"
+const foldText = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/đ/gi,"d").toLowerCase();
+
+// catalog: [{ maHang, tenHang, dvt, key }] dựng 1 lần ở App, dùng chung cho cả 2 tab
+function ProductSearch({ catalog, addedCodes, onAdd }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [hiIdx, setHiIdx] = useState(0);
   const inputRef = useRef();
   const dropRef  = useRef();
 
-  const catalog = useMemo(() => {
-    const map = {};
-    rows.forEach(r => { if (r.maHang && !map[r.maHang]) map[r.maHang] = { tenHang:r.tenHang, dvt:r.dvt }; });
-    return Object.entries(map).map(([maHang,{tenHang,dvt}]) => ({ maHang, tenHang, dvt }));
-  }, [rows]);
-
   const suggestions = useMemo(() => {
-    if (!text.trim()) return [];
-    const q = text.trim().toLowerCase();
-    return catalog.filter(p => p.tenHang.toLowerCase().includes(q) || p.maHang.toLowerCase().includes(q)).slice(0,40);
+    const q = foldText(text.trim());
+    if (!q) return [];
+    return catalog.filter(p => p.key.includes(q)).slice(0,40);
   }, [text, catalog]);
 
   useEffect(() => { setHiIdx(0); }, [suggestions]);
@@ -554,6 +552,7 @@ function SortableResultTable({ rows, needQty }) {
 export default function App() {
   const [activeRows, setActiveRows]   = useState([]);
   const [meta, setMeta]               = useState(null); // stock_meta của bản đang hiển thị
+  const [reading, setReading]         = useState(false);
   const [uploading, setUploading]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ done:0, total:0 });
   const [preview, setPreview]         = useState(null); // { fileName, result } — chờ xác nhận upload
@@ -576,7 +575,6 @@ export default function App() {
   const [sync, setSync] = useState({ state:"idle" });
   const [provinces, setProvinces] = useState([]);
   const [branches,  setBranches]  = useState([]);
-  const [pendingSearch, setPendingSearch] = useState(null);
   const [skuIndex, setSkuIndex] = useState(() => buildSkuIndex([]));
   const skuIndexRef = useRef(skuIndex); // để _applyRequest đọc index mà không cần effect
 
@@ -600,11 +598,6 @@ export default function App() {
     } catch {} // lỗi đã được báo qua trạng thái sync
   }, [_applyRows]);
 
-  const _runAutoSearch = useCallback((items, index) => {
-    setResults(computeLookup(items, index));        // Tab 1: Tra cứu mã hàng
-    setCoverageResults(computeCoverage(items, index)); // Tab 2: Kiểm tra chi nhánh
-  }, []);
-
   const _applyRequest = useCallback((raw) => {
     if (!Array.isArray(raw) || !raw.length) return;
     const mapped = raw.map(it => ({
@@ -614,15 +607,11 @@ export default function App() {
       needQty: it.needQty != null ? String(it.needQty) : "",
     })).filter(it => it.maHang);
     if (!mapped.length) return;
+    // Kết quả tự tính khi dữ liệu sẵn sàng (effect bên dưới)
     setLookupItems(mapped);
     setCoverItems(mapped);
     setTab("lookup");
-    if (skuIndexRef.current.idx.size > 0) {
-      _runAutoSearch(mapped, skuIndexRef.current);
-    } else {
-      setPendingSearch(mapped);
-    }
-  }, [_runAutoSearch]);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -685,18 +674,45 @@ export default function App() {
     return () => { alive = false; unsub(); };
   }, [_applyRows, _applyRequest]);
 
-  // Auto-search khi dữ liệu vừa load xong (tab mới mở)
+  // Kết quả luôn tự cập nhật: khi thêm/bớt mã, sửa số lượng cần, đổi bộ lọc, hoặc có dữ liệu mới
   useEffect(() => {
-    if (!pendingSearch || !skuIndex.idx.size) return;
-    setPendingSearch(null);
-    _runAutoSearch(pendingSearch, skuIndex);
-  }, [skuIndex, pendingSearch, _runAutoSearch]);
+    const keep = b => (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch);
+    const ready = skuIndex.idx.size > 0;
+    setResults(ready && lookupItems.length ? computeLookup(lookupItems, skuIndex, keep) : null);
+    setCoverageResults(ready && coverItems.length ? computeCoverage(coverItems, skuIndex, keep) : null);
+  }, [lookupItems, coverItems, skuIndex, filterProvince, filterBranch]);
 
-  // Build catalog from rows for dvt lookup
-  const catalog = useMemo(() => {
-    const map = {};
-    for (const [code, list] of skuIndex.idx) map[code] = { tenHang:list[0].tenHang, dvt:list[0].dvt };
-    return map;
+  // Tự kiểm tra bản mới: mỗi 2 phút khi tab đang mở, và mỗi khi người dùng quay lại tab
+  // (chỉ đọc 1 dòng stock_meta; chỉ tải khi phiên bản đổi)
+  const pollingRef = useRef(false);
+  const lastPollRef = useRef(0);
+  useEffect(() => {
+    const poll = async () => {
+      if (pollingRef.current || document.visibilityState !== "visible") return;
+      if (Date.now() - lastPollRef.current < 20000) return;
+      pollingRef.current = true; lastPollRef.current = Date.now();
+      try {
+        const r = await syncIfStale({ quiet:true });
+        if (r.changed) _applyRows(r.rows, r.meta); else setMeta(r.meta);
+      } catch {} // lỗi đã được báo qua trạng thái sync
+      pollingRef.current = false;
+    };
+    const timer = setInterval(poll, 120000);
+    const onVisible = () => { if (document.visibilityState === "visible") poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", onVisible); };
+  }, [_applyRows]);
+
+  // Danh mục mã hàng dựng 1 lần: map tra tên/ĐVT theo mã + danh sách gợi ý tìm không dấu
+  const { catalog, catalogList } = useMemo(() => {
+    const map = {}, list = [];
+    for (const [code, rows] of skuIndex.idx) {
+      const { tenHang, dvt } = rows[0];
+      map[code] = { tenHang, dvt };
+      list.push({ maHang:code, tenHang, dvt, key:foldText(code+" "+tenHang) });
+    }
+    return { catalog:map, catalogList:list };
   }, [skuIndex]);
 
   // ── Xuất sang v2.html (Lập báo giá) ──
@@ -720,20 +736,31 @@ export default function App() {
 
   // Bước 1: đọc & kiểm tra file → mở màn hình xem trước (chưa ghi gì lên máy chủ)
   const handleUpload = useCallback((file) => {
-    if (!file || uploading) return;
+    if (!file || uploading || reading) return;
+    setReading(true);
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async e => {
       try {
+        await new Promise(r => setTimeout(r, 50));
         // raw:true — file .xls xuất từ ERP thực chất là HTML; không để SheetJS tự đoán số ("1.234", "00100")
         const wb = XLSX.read(e.target.result, { type:"array", raw:true });
         const previousMeta = meta ? { ...meta, branches:branches.length } : null;
         const result = analyzeWorkbook(wb, XLSX, { branchMap:_branchMap, previousMeta });
+        if (result.blockers.length === 0 && result.rows.length > 0) {
+          const hash = await contentHashOfRows(result.rows).catch(() => null);
+          if (meta?.contentHash && hash === meta.contentHash) {
+            result.blockers.push(`File này giống hệt bản đang dùng (cập nhật ${fmtTime(meta.publishedAt)}${meta.uploader ? " bởi " + meta.uploader : ""}) — không cần upload lại.`);
+          } else if (meta && !meta.contentHash && meta.rowCount === result.stats.valid && Math.abs(Number(meta.qtySum) - result.stats.qtySum) < 0.5) {
+            result.warnings.push("Số dòng và tổng tồn trùng khớp bản đang dùng — có thể là cùng một file.");
+          }
+        }
         setPreview({ fileName:file.name, result });
       } catch(err) { alert("Không đọc được file Excel\n"+err.message); }
+      setReading(false);
     };
-    reader.onerror = () => alert("Không đọc được file");
+    reader.onerror = () => { setReading(false); alert("Không đọc được file"); };
     reader.readAsArrayBuffer(file);
-  }, [uploading, meta, branches]);
+  }, [uploading, reading, meta, branches]);
 
   // Bước 2: người dùng xác nhận → upload vào bảng tạm rồi chuyển sang bảng chính
   const confirmUpload = useCallback(async ({ code, uploader }) => {
@@ -761,15 +788,6 @@ export default function App() {
     setUploading(false);
   }, [preview, _applyRows]);
 
-  // Dữ liệu vừa đổi (sync bản mới, tab khác upload) → tính lại kết quả đang hiển thị
-  const lastIndexRef = useRef(skuIndex);
-  useEffect(() => {
-    if (lastIndexRef.current === skuIndex) return;
-    lastIndexRef.current = skuIndex;
-    const keep = b => (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch);
-    setResults(r => r ? computeLookup(r.items, skuIndex, keep) : r);
-    setCoverageResults(r => r ? computeCoverage(r.items, skuIndex, keep) : r);
-  }, [skuIndex, filterProvince, filterBranch]);
 
   const branchFileRef = useRef();
   const [branchUploading, setBranchUploading] = useState(false);
@@ -837,19 +855,7 @@ export default function App() {
     setCoverManual("");
   };
 
-  const keepFilter = b => (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch);
 
-  // Search
-  const doSearch = () => {
-    if (!activeRows.length || lookupItems.length===0) return;
-    setResults(computeLookup(lookupItems, skuIndex, keepFilter));
-  };
-
-  // Coverage
-  const doCoverage = () => {
-    if (!activeRows.length || coverItems.length===0) return;
-    setCoverageResults(computeCoverage(coverItems, skuIndex, keepFilter));
-  };
 
   const datasetName = meta?.fileName ? meta.fileName.replace(/.(xlsx|xls)$/i,"") : "Dữ liệu Supabase";
   const lookupAddedCodes = useMemo(()=>new Set(lookupItems.map(it=>it.maHang)), [lookupItems]);
@@ -883,11 +889,11 @@ export default function App() {
             )}
           </div>
           <div style={s.sbFoot}>
-            <div style={{ border:`2px dashed ${dragging?"#7ecfab":"#2d5490"}`, borderRadius:8, padding:"16px 12px", marginBottom:0, textAlign:"center", cursor:"pointer", background:dragging?"#1a4a7a":"#1a3257", transition:"all 0.2s" }}
-              onDragOver={e=>{e.preventDefault();setDragging(true);}}
+            <div style={{ border:`2px dashed ${dragging?"#7ecfab":"#2d5490"}`, borderRadius:8, padding:"16px 12px", marginBottom:0, textAlign:"center", cursor:(reading||uploading)?"default":"pointer", background:dragging?"#1a4a7a":"#1a3257", transition:"all 0.2s" }}
+              onDragOver={e=>{e.preventDefault();if(!reading&&!uploading)setDragging(true);}}
               onDragLeave={()=>setDragging(false)}
-              onDrop={e=>{e.preventDefault();setDragging(false);handleUpload(e.dataTransfer.files[0]);}}
-              onClick={()=>fileRef.current.click()}>
+              onDrop={e=>{e.preventDefault();setDragging(false);if(!reading&&!uploading)handleUpload(e.dataTransfer.files[0]);}}
+              onClick={()=>{if(!reading&&!uploading)fileRef.current.click();}}>
               <div style={{ fontSize:18, marginBottom:4 }}>📂</div>
               <div style={{ fontSize:10, color:C.dim, lineHeight:1.6 }}>
                 {uploading
@@ -903,6 +909,8 @@ export default function App() {
                         </div>
                       </>}
                     </div>
+                  : reading
+                  ? <span style={{color:"#f59e0b", fontWeight:600}}>⏳ Đang đọc file… (file lớn có thể mất 10–20 giây)</span>
                   : <><span style={{color:"#c8e8ff", fontWeight:600}}>Cập nhật data</span><br/><span style={{color:"#7a9bbf"}}>Tải tồn kho mới trừ tích xuất ERP</span></>
                 }
               </div>
@@ -968,7 +976,7 @@ export default function App() {
                   <>
                     <div style={s.panel}>
                       <label style={s.label}>Tìm theo tên hàng / mã hàng</label>
-                      <ProductSearch rows={activeRows} addedCodes={lookupAddedCodes} onAdd={addLookupItem}/>
+                      <ProductSearch catalog={catalogList} addedCodes={lookupAddedCodes} onAdd={addLookupItem}/>
 
                       {/* Manual code entry */}
                       <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
@@ -1008,12 +1016,11 @@ export default function App() {
                         )}
                       </div>
 
-                      <div style={s.btnRow}>
-                        <button style={s.btnP(lookupItems.length===0)} onClick={doSearch} disabled={lookupItems.length===0}>
-                          🔍 Tra cứu
-                        </button>
-                        {results && <button style={s.btnS} onClick={()=>{setLookupItems([]);setResults(null);setManualQuery("");}}>Xóa tất cả</button>}
-                      </div>
+                      {lookupItems.length>0 && (
+                        <div style={s.btnRow}>
+                          <button style={s.btnS} onClick={()=>{setLookupItems([]);setManualQuery("");}}>Xóa tất cả</button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Results */}
@@ -1062,7 +1069,7 @@ export default function App() {
                       </>
                     )}
 
-                    {!results && <div style={s.empty}><div style={s.emptyIcon}>🔍</div>Thêm mã hàng và nhấn Tra cứu</div>}
+                    {!results && <div style={s.empty}><div style={s.emptyIcon}>🔍</div>Thêm mã hàng — kết quả hiện ngay</div>}
                   </>
                 )}
 
@@ -1071,7 +1078,7 @@ export default function App() {
                   <>
                     <div style={s.panel}>
                       <label style={s.label}>Thêm mã hàng cần kiểm tra</label>
-                      <ProductSearch rows={activeRows} addedCodes={coverAddedCodes} onAdd={addCoverItem}/>
+                      <ProductSearch catalog={catalogList} addedCodes={coverAddedCodes} onAdd={addCoverItem}/>
 
                       <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
                         <textarea style={{ ...s.textarea, flex:1, minHeight:44, resize:"none" }}
@@ -1109,12 +1116,11 @@ export default function App() {
                         )}
                       </div>
 
-                      <div style={s.btnRow}>
-                        <button style={s.btnP(coverItems.length===0)} onClick={doCoverage} disabled={coverItems.length===0}>
-                          🗺 Kiểm tra
-                        </button>
-                        {coverageResults && <button style={s.btnS} onClick={()=>{setCoverItems([]);setCoverageResults(null);setCoverManual("");}}>Xóa tất cả</button>}
-                      </div>
+                      {coverItems.length>0 && (
+                        <div style={s.btnRow}>
+                          <button style={s.btnS} onClick={()=>{setCoverItems([]);setCoverManual("");}}>Xóa tất cả</button>
+                        </div>
+                      )}
                     </div>
 
                     {coverageResults && (
@@ -1186,7 +1192,7 @@ export default function App() {
                     {!coverageResults && (
                       <div style={s.empty}>
                         <div style={s.emptyIcon}>🗺</div>
-                        Thêm mã hàng và nhấn Kiểm tra<br/>
+                        Thêm mã hàng — kết quả hiện ngay<br/>
                         <span style={{ fontSize:11, color:C.muted }}>Tìm chi nhánh tồn đủ tất cả mã theo số lượng yêu cầu</span>
                       </div>
                     )}

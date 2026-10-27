@@ -11,6 +11,7 @@ const ROW_FIELDS = ["maHang", "tenHang", "chiNhanh", "tinhThanh", "maKho", "dvt"
 
 const TABLE = "stock_by_branch";
 const META_TABLE = "stock_meta";
+const SNAPSHOT_TABLE = "stock_snapshot";
 const PAGE = 1000;
 const CHUNK = 2000;
 const CHUNK_RETRIES = 3;          // retry tối đa 3 lần/chunk (ngoài lần đầu)
@@ -72,6 +73,7 @@ const RPC_MESSAGES = {
   upload_mismatch: "Lượt upload này đã bị huỷ hoặc bị thay bởi lượt upload khác. Vui lòng upload lại.",
   row_count_mismatch: "Số dòng server nhận được không khớp với file (có thể mất dữ liệu khi gửi). Đã huỷ lượt upload, vui lòng thử lại.",
   empty_upload: "File không có dòng dữ liệu nào để upload.",
+  snapshot_invalid: "Bản nén dữ liệu gửi lên bị lỗi.",
 };
 
 // Chuyển lỗi Supabase/PostgREST/mạng sang Error tiếng Việt
@@ -126,6 +128,9 @@ function normMeta(r) {
     uploadStartedAt: r.upload_started_at ?? r.uploadStartedAt ?? null,
     uploader: r.uploader ?? null,
     fileName: r.file_name ?? r.fileName ?? null,
+    contentHash: r.content_hash ?? r.contentHash ?? null,
+    snapshotSha256: r.snapshot_sha256 ?? r.snapshotSha256 ?? null,
+    snapshotBytes: r.snapshot_bytes ?? r.snapshotBytes ?? null,
   };
 }
 
@@ -270,15 +275,104 @@ function snapMeta(s) {
   return {
     version: s.version, status: "ready", rowCount: s.rowCount, qtySum: s.qtySum ?? null,
     publishedAt: s.publishedAt ?? null, uploadId: null, uploadStartedAt: null, uploader: s.uploader ?? null,
-    fileName: s.fileName ?? null,
+    fileName: s.fileName ?? null, contentHash: s.contentHash ?? null,
   };
 }
 
 function buildSnap(meta, cols, n) {
   return {
     version: meta.version, rowCount: n, qtySum: meta.qtySum, publishedAt: meta.publishedAt,
-    fileName: meta.fileName, uploader: meta.uploader ?? null, savedAt: new Date().toISOString(), cols,
+    fileName: meta.fileName, uploader: meta.uploader ?? null, contentHash: meta.contentHash ?? null,
+    savedAt: new Date().toISOString(), cols,
   };
+}
+
+// ─── Snapshot nén (JSON từ điển + gzip) ──────────────────────────────────────
+// { v:2, n, P:[[maHang,tenHang,dvt]…], B:[[chiNhanh,tinhThanh,maKho]…], p:[idx P…], b:[idx B…], q:[cuoiKy…] }
+// 8.771 mã × 249 chi nhánh → ~6 MB JSON, ~2–3 MB gzip (so với ~90 MB JSON khi phân trang)
+function snapshotJson(cols, n) {
+  const P = [], B = [], pIdx = new Map(), bIdx = new Map();
+  const p = new Array(n), b = new Array(n), q = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const pk = cols.maHang[i] + "\u0001" + cols.tenHang[i] + "\u0001" + cols.dvt[i];
+    let pi = pIdx.get(pk);
+    if (pi === undefined) { pi = P.length; pIdx.set(pk, pi); P.push([cols.maHang[i], cols.tenHang[i], cols.dvt[i]]); }
+    const bk = cols.chiNhanh[i] + "\u0001" + cols.tinhThanh[i] + "\u0001" + cols.maKho[i];
+    let bi = bIdx.get(bk);
+    if (bi === undefined) { bi = B.length; bIdx.set(bk, bi); B.push([cols.chiNhanh[i], cols.tinhThanh[i], cols.maKho[i]]); }
+    p[i] = pi; b[i] = bi; q[i] = cols.cuoiKy[i];
+  }
+  return JSON.stringify({ v: 2, n, P, B, p, b, q });
+}
+
+function snapshotToCols(obj) {
+  if (!obj || obj.v !== 2 || !Array.isArray(obj.p)) throw new Error("Định dạng snapshot không hỗ trợ");
+  const n = obj.n, cols = emptyCols(n);
+  if (obj.p.length !== n || obj.b.length !== n || obj.q.length !== n) throw new Error("Snapshot hỏng: độ dài cột lệch");
+  for (let i = 0; i < n; i++) {
+    const pr = obj.P[obj.p[i]], br = obj.B[obj.b[i]];
+    cols.maHang[i] = pr[0]; cols.tenHang[i] = pr[1]; cols.dvt[i] = pr[2];
+    cols.chiNhanh[i] = br[0]; cols.tinhThanh[i] = br[1]; cols.maKho[i] = br[2];
+    cols.cuoiKy[i] = obj.q[i];
+  }
+  return { cols, n };
+}
+
+const enc = new TextEncoder();
+async function sha256Hex(bytes) {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  let s = "";
+  for (let i = 0; i < h.length; i++) s += h[i].toString(16).padStart(2, "0");
+  return s;
+}
+async function streamBytes(bytes, transform) {
+  const out = await new Response(new Blob([bytes]).stream().pipeThrough(transform)).arrayBuffer();
+  return new Uint8Array(out);
+}
+function toBase64(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromBase64(b64) {
+  const s = atob(b64), out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+const canSnapshot = () =>
+  typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined" && !!globalThis.crypto?.subtle;
+
+// Mã băm nội dung — cùng file Excel (cùng thứ tự dòng) cho cùng mã → phát hiện upload trùng
+export async function contentHashOfRows(rows) {
+  if (!globalThis.crypto?.subtle) return null;
+  const { cols } = rowsToCols(rows);
+  return sha256Hex(enc.encode(snapshotJson(cols, rows.length)));
+}
+
+async function buildSnapshotPayload(cols, n) {
+  const json = enc.encode(snapshotJson(cols, n));
+  const gz = await streamBytes(json, new CompressionStream("gzip"));
+  return { b64: toBase64(gz), sha256: await sha256Hex(gz), contentHash: await sha256Hex(json) };
+}
+
+// Tải snapshot của đúng phiên bản; mọi lỗi → null để quay về phân trang
+async function downloadSnapshot(meta) {
+  if (!meta.snapshotSha256 || !canSnapshot()) return null;
+  try {
+    emit({ state: "downloading", loaded: 0, total: meta.rowCount, ...statusInfo(meta) });
+    const { data, error } = await sb().from(SNAPSHOT_TABLE).select("data_b64,sha256,row_count").eq("version", meta.version).maybeSingle();
+    if (error || !data) throw error || new Error("Không có snapshot cho phiên bản này");
+    const gz = fromBase64(data.data_b64);
+    if ((await sha256Hex(gz)) !== meta.snapshotSha256) throw new Error("sha256 snapshot không khớp");
+    const json = new TextDecoder().decode(await streamBytes(gz, new DecompressionStream("gzip")));
+    const { cols, n } = snapshotToCols(JSON.parse(json));
+    if (n !== meta.rowCount) throw new Error(`snapshot ${n} dòng ≠ ${meta.rowCount}`);
+    emit({ state: "downloading", loaded: n, total: n, ...statusInfo(meta) });
+    return { cols, n, meta };
+  } catch (e) {
+    console.warn("[stockSync] snapshot lỗi, chuyển sang tải từng trang:", e);
+    return null;
+  }
 }
 
 async function readValidSnap() {
@@ -421,6 +515,10 @@ async function downloadAll(total) {
 
 // Tải + kiểm tra row_count & version; thử lại 1 lần
 async function downloadVerified(meta0) {
+  // Snapshot gắn với đúng version nên không cần đọc lại meta để kiểm tra
+  const snap = await downloadSnapshot(meta0);
+  if (snap) return snap;
+
   let meta = meta0;
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -441,8 +539,8 @@ async function downloadVerified(meta0) {
   throw lastErr;
 }
 
-export async function syncIfStale({ force = false } = {}) {
-  emit({ state: "checking" });
+export async function syncIfStale({ force = false, quiet = false } = {}) {
+  if (!quiet) emit({ state: "checking" });
   try {
     return await withLock(async () => {
       // Đọc cache SAU khi có khoá: tab khác có thể vừa đồng bộ xong
@@ -462,9 +560,11 @@ export async function syncIfStale({ force = false } = {}) {
         return { rows: [], meta: remote, changed: false };
       }
       if (!force && cached && cached.version === remote.version) {
-        const meta = snapMeta(cached);
+        // Meta lấy từ máy chủ (cùng version) để có contentHash, người upload mới nhất…
+        const meta = { ...snapMeta(cached), ...remote, status: "ready", uploadId: null, uploadStartedAt: null };
         emit({ state: finalState, loaded: cached.rowCount, total: cached.rowCount, ...statusInfo(meta) });
-        return { rows: colsToRows(cached.cols, cached.rowCount), meta, changed: false };
+        // quiet (kiểm tra định kỳ): không dựng lại 458k dòng khi không có gì mới
+        return { rows: quiet ? null : colsToRows(cached.cols, cached.rowCount), meta, changed: false };
       }
 
       const { cols, n, meta: got } = await downloadVerified(remote);
@@ -556,6 +656,21 @@ export async function uploadStock({ code, rows, uploader = "", fileName = "", on
         throw e;
       }
       report(end);
+    }
+
+    // Snapshot nén cho máy khác tải nhanh. Không bắt buộc: lỗi (kể cả máy chủ chưa chạy
+    // phase3) thì vẫn commit, máy đọc tự quay về tải từng trang.
+    if (canSnapshot()) {
+      try {
+        const snap = await buildSnapshotPayload(cols, n);
+        await rpc("stock_attach_snapshot", {
+          p_code, p_upload_id: uploadId, p_data_b64: snap.b64, p_sha256: snap.sha256,
+          p_row_count: n, p_qty_sum: qtySum, p_content_hash: snap.contentHash,
+        });
+      } catch (e) {
+        if (e.code === "bad_code" || e.code === "upload_mismatch") throw e;
+        console.warn("[stockSync] không gửi được snapshot, vẫn tiếp tục commit:", e);
+      }
     }
 
     // Commit: lock_timeout thì thử lại (transaction đã rollback, an toàn)
