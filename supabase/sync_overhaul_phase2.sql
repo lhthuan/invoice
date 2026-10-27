@@ -34,6 +34,9 @@ BEGIN
     -- Bật RLS, bỏ anon_all, đảm bảo anon_select.
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS anon_all ON public.%I', t);
+    -- Policy tạo tay trên Dashboard (đã thấy trên branches: "anon write" FOR ALL, "anon read")
+    EXECUTE format('DROP POLICY IF EXISTS "anon write" ON public.%I', t);
+    EXECUTE format('DROP POLICY IF EXISTS "anon read" ON public.%I', t);
     EXECUTE format('DROP POLICY IF EXISTS anon_select ON public.%I', t);
     EXECUTE format(
       'CREATE POLICY anon_select ON public.%I FOR SELECT TO anon USING (true)', t);
