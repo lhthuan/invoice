@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
+import { initStockSync, loadCached, syncIfStale, uploadStock, subscribe } from "./stockSync.js";
+import { analyzeWorkbook, normHeader } from "./excelParse.js";
 
 // ─── BUILD INFO ──────────────────────────────────────────────────────────────
 const BUILD_DATE = new Date(__BUILD_TIME__).toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", timeZone:"Asia/Ho_Chi_Minh" });
-const VERSION = "1.3.0";
+const VERSION = "2.0.0";
 
 // ─── COLORS (Light ERP Theme) ─────────────────────────────────────────────────
 const C = {
@@ -40,8 +42,6 @@ const C = {
 
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────────────────
 const SB_URL = "https://kyimvqljohydxpoosxln.supabase.co";
-const SB_TABLE = "stock_by_branch";
-const SB_META_KEY = "inv_file_meta";
 
 function getSbCfg() {
   try { return JSON.parse(localStorage.getItem("tsp_v2_config") || "{}"); } catch { return {}; }
@@ -60,272 +60,105 @@ const LS_BRANCH_MAP = 'tsp_branch_map';
 let _branchMap = {};
 try { _branchMap = JSON.parse(localStorage.getItem(LS_BRANCH_MAP) || '{}'); } catch {}
 
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
 async function loadBranchMap() {
   const sb = getSb();
   if (!sb) return;
-  const { data } = await sb.from('branches').select('chi_nhanh, tinh_thanh');
+  const { data, error } = await sb.from('branches').select('chi_nhanh, tinh_thanh');
+  if (error) throw new Error(error.message);
   if (data?.length) {
     const map = {};
     data.forEach(r => { map[String(r.chi_nhanh).trim()] = r.tinh_thanh; });
     _branchMap = map;
-    localStorage.setItem(LS_BRANCH_MAP, JSON.stringify(map));
+    lsSet(LS_BRANCH_MAP, JSON.stringify(map));
   }
 }
 
-async function saveBranchMap(rows) {
+async function saveBranchMap(rows, code) {
   const sb = getSb();
   if (!sb) throw new Error("Chưa kết nối Supabase");
-  const { error } = await sb.from('branches').upsert(rows);
-  if (error) throw new Error(error.message);
+  const { error } = await sb.rpc('branches_upsert', { p_code: code, p_rows: rows });
+  if (error) {
+    if (/bad_code/.test(error.message)) { clearUploadCode(); throw new Error("Mã upload không đúng."); }
+    throw new Error(error.message);
+  }
   const map = {};
   rows.forEach(r => { map[r.chi_nhanh] = r.tinh_thanh; });
   _branchMap = { ..._branchMap, ...map };
-  localStorage.setItem(LS_BRANCH_MAP, JSON.stringify(_branchMap));
+  lsSet(LS_BRANCH_MAP, JSON.stringify(_branchMap));
 }
 
-// ─── OFFLINE INDEX (IndexedDB cache of Supabase data) ────────────────────────
-// v3: bỏ dedup trong cacheWrite — lưu toàn bộ 510k rows, sum khi query
-const CACHE_DB = "InvCacheDB", CACHE_VER = 3, CACHE_ST = "stock";
-const LS_SB_UPDATED = "inv_sb_updated_at"; // timestamp data trên Supabase
-const LS_CACHE_TS   = "inv_cache_ts";       // set when IndexedDB is synced
-
-function cacheOpen() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(CACHE_DB, CACHE_VER);
-    r.onupgradeneeded = e => {
-      const db = e.target.result;
-      // Xoá store cũ (v1 có index không cần thiết), tạo lại không có index
-      if (db.objectStoreNames.contains(CACHE_ST)) db.deleteObjectStore(CACHE_ST);
-      db.createObjectStore(CACHE_ST, { autoIncrement: true });
-      // Buộc re-sync vì store bị xoá
-      try { localStorage.removeItem(LS_CACHE_TS); } catch {}
-    };
-    r.onsuccess = () => res(r.result);
-    r.onerror   = () => rej(r.error);
-  });
+// ─── MÃ UPLOAD (dùng chung key với Lập báo giá) ──────────────────────────────
+const SS_UPLOAD_CODE = 'tsp_upload_code';
+const LS_UPLOADER    = 'inv_uploader';
+function getSavedUploadCode() { try { return sessionStorage.getItem(SS_UPLOAD_CODE) || ""; } catch { return ""; } }
+function saveUploadCode(c)    { try { sessionStorage.setItem(SS_UPLOAD_CODE, c); } catch {} }
+function clearUploadCode()    { try { sessionStorage.removeItem(SS_UPLOAD_CODE); } catch {} }
+async function askUploadCode() {
+  const saved = getSavedUploadCode();
+  if (saved) return saved;
+  const code = (window.prompt("Nhập mã upload:") || "").trim();
+  if (!code) return "";
+  const { data, error } = await getSb().rpc('upload_code_check', { p_code: code });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Mã upload không đúng.");
+  saveUploadCode(code);
+  return code;
 }
 
-async function cacheWrite(rows) {
-  // Không dedup — lưu toàn bộ rows từ Supabase
-  // doSearch và doCoverage đã tự sum khi hiển thị kết quả
-  const db = await cacheOpen();
-  const BATCH = 20000;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    await new Promise((res, rej) => {
-      const tx = db.transaction(CACHE_ST, "readwrite");
-      const st = tx.objectStore(CACHE_ST);
-      if (i === 0) st.clear();
-      rows.slice(i, i + BATCH).forEach(r => st.add(r));
-      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-    });
-  }
-  localStorage.setItem(LS_CACHE_TS, new Date().toISOString());
-}
-
-async function cacheReadAll() {
-  const db = await cacheOpen();
-  return new Promise((res, rej) => {
-    const r = db.transaction(CACHE_ST, "readonly").objectStore(CACHE_ST).getAll();
-    r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error);
-  });
-}
-
-// Query Supabase để lấy updated_at mới nhất, so sánh với cache local
-// → true nếu Supabase có data mới hơn (bất kể ai upload)
-async function cacheIsStale() {
-  const cacheTs = localStorage.getItem(LS_CACHE_TS);
-  if (!cacheTs) return true; // chưa sync lần nào
-  const sb = getSb();
-  if (!sb) return false;     // offline → dùng cache hiện tại
-  try {
-    const { data } = await sb
-      .from(SB_TABLE)
-      .select("updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    const sbTs = data?.[0]?.updated_at;
-    if (!sbTs) return false;
-    try { localStorage.setItem(LS_SB_UPDATED, sbTs); } catch {} // lưu để hiển thị ngày data
-    return new Date(sbTs) > new Date(cacheTs);
-  } catch { return false; } // lỗi mạng → dùng cache
-}
-
-// ─── SUPABASE DATA LAYER ─────────────────────────────────────────────────────
-function _metaList() {
-  try { return JSON.parse(localStorage.getItem(SB_META_KEY) || "[]"); } catch { return []; }
-}
-function _metaSave(list) { localStorage.setItem(SB_META_KEY, JSON.stringify(list)); }
-
-let _syncProgressCb = null; // set by React component để hiện tiến độ
-
-function _mapRow(r) {
-  return {
-    ma_hang:    (r.ma_hang||"").toLowerCase(),
-    ten_hang:   r.ten_hang   || "",
-    chi_nhanh:  r.chi_nhanh  || "",
-    tinh_thanh: r.tinh_thanh || "",
-    ma_kho:     r.ma_kho     || "",
-    dvt:        r.dvt        || "",
-    cuoi_ky:    r.cuoi_ky    || 0,
-  };
-}
-
-async function _fetchAllFromSb() {
-  const sb = getSb();
-  if (!sb) return [];
-
-  const { count, error: cntErr } = await sb
-    .from(SB_TABLE).select("*", { count: "exact", head: true });
-  if (cntErr || !count) return [];
-
-  // PAGE=1000 khớp với max_rows mặc định của Supabase PostgREST
-  // PAGE=2000 bị Supabase cắt còn 1000 → bỏ qua rows 1000-1999, 3000-3999... → mất nửa data
-  const PAGE = 1000;
-  const CONCURRENCY = 4;
-  const totalPages = Math.ceil(count / PAGE);
-  let all = new Array(totalPages).fill(null);
-
-  for (let b = 0; b < totalPages; b += CONCURRENCY) {
-    const batch = [];
-    for (let i = b; i < Math.min(b + CONCURRENCY, totalPages); i++) batch.push(i);
-    const results = await Promise.all(batch.map(async p => {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { data, error } = await sb.from(SB_TABLE).select("*").range(p * PAGE, (p + 1) * PAGE - 1);
-        if (!error && data) return { p, rows: data.map(_mapRow) };
-        if (attempt < 2) await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
-      }
-      return { p, rows: null };
-    }));
-    results.forEach(({ p, rows }) => { if (rows) all[p] = rows; });
-    if (_syncProgressCb) _syncProgressCb(all.filter(Boolean).reduce((s, a) => s + a.length, 0));
-  }
-
-  // Retry tuần tự các page bị lỗi
-  for (let p = 0; p < totalPages; p++) {
-    if (all[p] !== null) continue;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-      const { data, error } = await sb.from(SB_TABLE).select("*").range(p * PAGE, (p + 1) * PAGE - 1);
-      if (!error && data) { all[p] = data.map(_mapRow); break; }
-    }
-    if (_syncProgressCb) _syncProgressCb(all.filter(Boolean).reduce((s, a) => s + a.length, 0));
-  }
-
-  return all.filter(Boolean).flat();
-}
-
-let _savingCb = null; // callback khi đang ghi IndexedDB
-
-// Sync Supabase → IndexedDB nếu cache stale
-async function syncCacheIfNeeded() {
-  if (!await cacheIsStale()) return false;
-  const rows = await _fetchAllFromSb();
-  if (rows.length) {
-    if (_savingCb) _savingCb(rows.length);
-    await cacheWrite(rows);
-  }
-  return true;
-}
-
-// Upload: xoá toàn bộ Supabase data cũ → insert mới → đánh dấu cache stale
-async function dbSave(meta, rows, onProgress) {
-  const sb = getSb();
-  if (!sb) throw new Error("Chưa kết nối Supabase — kiểm tra cài đặt trong Lập báo giá");
-  // Xoá toàn bộ data cũ (theo batch để tránh timeout với bảng lớn)
-  let deleted = false;
-  for (let attempt = 0; attempt < 3 && !deleted; attempt++) {
-    const { error: delErr } = await sb.from(SB_TABLE).delete().not("id", "is", null);
-    if (!delErr) { deleted = true; break; }
-    if (attempt === 2) throw new Error("Xoá dữ liệu cũ thất bại: " + delErr.message);
-    await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-  }
-  // Insert chunk 2000 dòng/lần (giảm số HTTP request từ ~1000 xuống ~250)
-  const CHUNK = 2000, now = new Date().toISOString();
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK).map(r => ({
-      ma_hang:   r.maHang    || "",
-      ten_hang:  r.tenHang   || "",
-      chi_nhanh: r.chiNhanh  || "",
-      tinh_thanh:r.tinhThanh || "",
-      ma_kho:    r.maKho     || "",
-      dvt:       r.dvt       || "",
-      cuoi_ky:   parseFloat(String(r.cuoiKy).replace(/[^0-9.-]/g,"")) || 0,
-      updated_at: now,
-    }));
-    // Retry tối đa 3 lần nếu lỗi tạm thời (timeout, rate limit)
-    let ok = false;
-    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
-      const { error } = await sb.from(SB_TABLE).insert(chunk);
-      if (!error) { ok = true; break; }
-      if (attempt === 2) throw new Error(`Lỗi insert dòng ${i}–${i+chunk.length}: ${error.message}`);
-      await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-    }
-    if (onProgress) onProgress(Math.min(i + CHUNK, rows.length), rows.length);
-  }
-  // Đánh dấu cần re-sync IndexedDB + cập nhật meta ngay
-  localStorage.setItem(LS_SB_UPDATED, now);
-  const cacheRows = rows.map(r => ({
-    ma_hang:    (r.maHang||"").toLowerCase(),
-    ten_hang:   r.tenHang   || "",
-    chi_nhanh:  r.chiNhanh  || "",
-    tinh_thanh: r.tinhThanh || "",
-    ma_kho:     r.maKho     || "",
-    dvt:        r.dvt       || "",
-    cuoi_ky:    parseFloat(String(r.cuoiKy).replace(/[^0-9.-]/g,"")) || 0,
-  }));
-  await cacheWrite(cacheRows); // build index ngay sau upload
-  // Lưu file meta vào localStorage
-  const list = _metaList().filter(m => m.id !== meta.id);
-  list.unshift({ ...meta, sbUpdatedAt: now });
-  _metaSave(list.slice(0, 20));
-}
-
-// Load: ưu tiên IndexedDB → fallback Supabase nếu cache stale
-async function dbLoad(_id) {
-  await syncCacheIfNeeded();
-  const rows = await cacheReadAll();
-  // Normalize format cho UI (cuoiKy vẫn là số)
-  return rows.map(r => ({
-    maHang:   r.ma_hang,
-    tenHang:  r.ten_hang,
-    chiNhanh: r.chi_nhanh,
-    tinhThanh:r.tinh_thanh,
-    maKho:    r.ma_kho,
-    dvt:      r.dvt,
-    cuoiKy:   r.cuoi_ky,
-  }));
-}
-
-async function dbListMeta() { return _metaList(); }
-
-async function dbDelete(id) {
-  // Chỉ xoá meta entry — không xoá Supabase data
-  _metaSave(_metaList().filter(m => m.id !== id));
-}
-
-// ─── UTILS ───────────────────────────────────────────────────────────────────
-function normalizeRows(rows) {
-  return rows.map(r => {
-    const keys = Object.keys(r);
-    const get = ps => { const k=keys.find(k=>ps.some(p=>k.toLowerCase().includes(p.toLowerCase()))); return k?String(r[k]).trim():""; };
-    const chiNhanh  = get(["chi nhánh","chi nhanh","chinhanh","branch"]);
-    const tinhThanh = get(["tỉnh thành","tinh thanh","tỉnh","tinh","province","city"])
-                   || _branchMap[chiNhanh] || "";
-    return {
-      maHang:   get(["mã hàng","ma hang","mahang","item code","itemcode","code","sku"]),
-      tenHang:  get(["tên hàng","ten hang","tenhang","product name","name","product"]),
-      chiNhanh,
-      tinhThanh,
-      maKho:    get(["mã kho","ma kho","makho","warehouse"]),
-      dvt:      get(["đvt","dvt","unit","đơn vị","don vi"]),
-      cuoiKy:   get(["cuối kỳ","cuoi ky","cuoiky","tồn","ton kho","quantity","qty","số lượng"]),
-    };
-  });
-}
 const parseQty = v => { const n=parseFloat(String(v).replace(/[^0-9.-]/g,"")); return isNaN(n)?0:n; };
 const fmtNum  = n => n.toLocaleString("vi-VN");
-const fmtSize = b => b<1024*1024?`${(b/1024).toFixed(0)} KB`:`${(b/1024/1024).toFixed(1)} MB`;
 const parseCodes = t => [...new Set(t.split(/[\n,;，、\s]+/).map(c=>c.trim().toUpperCase()).filter(Boolean))];
+const fmtTime = ts => new Date(ts).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Ho_Chi_Minh"});
+
+// ─── TRA CỨU (index theo mã hàng, dựng 1 lần mỗi khi dữ liệu đổi) ────────────
+function buildSkuIndex(rows) {
+  const idx = new Map();
+  const pairs = new Map(); // "chiNhanh||tinhThanh" → { chiNhanh, tinhThanh }
+  for (const r of rows) {
+    const list = idx.get(r.maHang);
+    if (list) list.push(r); else idx.set(r.maHang, [r]);
+    const key = r.chiNhanh+"||"+r.tinhThanh;
+    if (!pairs.has(key)) pairs.set(key, { chiNhanh:r.chiNhanh, tinhThanh:r.tinhThanh });
+  }
+  return { idx, pairs };
+}
+
+function computeLookup(items, index, keep = () => true) {
+  const map = {};
+  items.forEach(it => {
+    map[it.maHang] = { rows:(index.idx.get(it.maHang)||[]).filter(keep), needQty:it.needQty, tenHang:it.tenHang, dvt:it.dvt };
+  });
+  return { items, map };
+}
+
+function computeCoverage(items, index, keepBranch = () => true) {
+  const thresholds = {};
+  items.forEach(it => { thresholds[it.maHang] = it.needQty==='' ? 0 : Number(it.needQty); });
+  const codes = items.map(it=>it.maHang);
+  const branchMap = {};
+  for (const [key, b] of index.pairs) if (keepBranch(b)) branchMap[key] = { ...b, qtyMap:{} };
+  codes.forEach(code => {
+    for (const r of index.idx.get(code)||[]) {
+      const b = branchMap[r.chiNhanh+"||"+r.tinhThanh];
+      if (b) b.qtyMap[code] = (b.qtyMap[code]||0) + parseQty(r.cuoiKy);
+    }
+  });
+  const rows = Object.values(branchMap).map(b => {
+    const codeStatus = codes.map(c => ({
+      code: c,
+      qty: b.qtyMap[c]||0,
+      needed: thresholds[c]||0,
+      // Không nhập số lượng cần → chỉ cần còn hàng; chi nhánh tồn 0 không bao giờ tính là đủ
+      ok: (b.qtyMap[c]||0) > 0 && (b.qtyMap[c]||0) >= (thresholds[c]||0),
+      info: items.find(it=>it.maHang===c),
+    }));
+    const count = codeStatus.filter(cs=>cs.ok).length;
+    return { ...b, codeStatus, count, hasAll: count===codes.length };
+  }).sort((a,b) => b.count-a.count || a.chiNhanh.localeCompare(b.chiNhanh));
+  return { codes, rows, items };
+}
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const s = {
@@ -387,15 +220,116 @@ const s = {
 };
 
 // ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
-function ConfirmModal({ message, onConfirm, onCancel }) {
+// ─── TRẠNG THÁI ĐỒNG BỘ ──────────────────────────────────────────────────────
+function SyncBadge({ sync, rowCount }) {
+  const dot = (color, pulse) => <span style={{ width:8, height:8, borderRadius:"50%", background:color, display:"inline-block", animation: pulse ? "pulse 1s infinite" : "none" }}/>;
+  const n = v => (v||0).toLocaleString("vi-VN");
+  const warn = sync.error ? <span title={sync.error} style={{ color:"#fbbf24", cursor:"help" }}>⚠</span> : null;
+  switch (sync.state) {
+    case "checking":    return <>{dot("#f59e0b", true)} Đang kiểm tra bản mới…</>;
+    case "downloading": return <>{dot("#f59e0b", true)} Đang tải {sync.total ? `${n(sync.loaded)} / ${n(sync.total)}` : n(sync.loaded)} dòng…</>;
+    case "saving":      return <>{dot("#60a5fa", true)} Đang lưu bản offline…</>;
+    case "ready":       return <>{dot("#7ecfab")} Mới nhất · {n(rowCount)} dòng {warn}</>;
+    case "uploading-elsewhere":
+      return <span title="Trong lúc máy khác upload, bạn vẫn xem được bản trước đó">{dot("#f59e0b", true)} Máy khác đang upload — đang xem bản trước {warn}</span>;
+    case "offline":     return <span title={sync.error}>{dot("#9aa5b4")} Mất kết nối — đang dùng bản offline</span>;
+    case "error":       return <span title={sync.error} style={{ color:"#fca5a5", cursor:"help" }}>{dot("#f87171")} Lỗi đồng bộ: {String(sync.error||"").slice(0,60)}</span>;
+    default:            return rowCount > 0 ? <>{dot("#7ecfab")} {n(rowCount)} dòng offline</> : null;
+  }
+}
+
+// ─── XEM TRƯỚC & XÁC NHẬN UPLOAD ─────────────────────────────────────────────
+const FIELD_LABELS = [
+  ["maHang","Mã hàng"], ["tenHang","Tên hàng"], ["chiNhanh","Chi nhánh"], ["tinhThanh","Tỉnh thành"],
+  ["maKho","Mã kho"], ["dvt","ĐVT"], ["cuoiKy","Tồn cuối kỳ"],
+];
+
+function UploadPreviewModal({ preview, prevMeta, onCancel, onConfirm }) {
+  const { fileName, result } = preview;
+  const { blockers=[], warnings=[], stats={}, columns={}, skipped=[], rows=[] } = result;
+  const [ack, setAck] = useState(false);
+  const [code, setCode] = useState(getSavedUploadCode);
+  const [uploader, setUploader] = useState(() => { try { return localStorage.getItem(LS_UPLOADER) || ""; } catch { return ""; } });
+  const blocked = blockers.length > 0;
+  const canSubmit = !blocked && (warnings.length === 0 || ack) && code.trim() && uploader.trim();
+  const box = (bg, border, color) => ({ background:bg, border:`1px solid ${border}`, color, borderRadius:6, padding:"8px 12px", fontSize:11, marginBottom:10, lineHeight:1.6 });
+
   return (
-    <div style={s.modalOverlay} onClick={onCancel}>
-      <div style={s.modal} onClick={e=>e.stopPropagation()}>
-        <div style={{ fontSize:12, color:C.text, fontWeight:700, marginBottom:16 }}>⚠ Xác nhận</div>
-        <div style={{ fontSize:12, color:C.dim, marginBottom:20 }}>{message}</div>
+    <div style={s.modalOverlay}>
+      <div style={{ ...s.modal, width:720, maxHeight:"90vh", overflowY:"auto" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontSize:13, color:C.text, fontWeight:700, marginBottom:4 }}>Xem trước dữ liệu upload</div>
+        <div style={{ fontSize:11, color:C.dim, marginBottom:14 }}>
+          {fileName} · sheet <b>{result.sheetName}</b> · dòng tiêu đề {result.headerRow != null ? result.headerRow + 1 : "?"}
+        </div>
+
+        {blocked && (
+          <div style={box(C.redBg, C.redBorder, C.red)}>
+            <b>Không thể upload:</b>
+            {blockers.map((b,i)=><div key={i}>• {b}</div>)}
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div style={box(C.amberBg, C.amberBorder, C.amber)}>
+            <b>Cần kiểm tra:</b>
+            {warnings.map((w,i)=><div key={i}>• {w}</div>)}
+            {!blocked && (
+              <label style={{ display:"flex", alignItems:"center", gap:6, marginTop:6, cursor:"pointer" }}>
+                <input type="checkbox" checked={ack} onChange={e=>setAck(e.target.checked)}/> Tôi đã kiểm tra và vẫn muốn upload
+              </label>
+            )}
+          </div>
+        )}
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:12 }}>
+          <table style={{ ...s.table, fontSize:11 }}>
+            <tbody>
+              {FIELD_LABELS.map(([k,label]) => (
+                <tr key={k}>
+                  <td style={{ ...s.td, color:C.dim }}>{label}</td>
+                  <td style={{ ...s.td, color: columns[k] ? C.text : C.muted }}>{columns[k] || "— không thấy —"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table style={{ ...s.table, fontSize:11 }}>
+            <tbody>
+              <tr><td style={{ ...s.td, color:C.dim }}>Dòng hợp lệ</td><td style={s.tdNum}>{fmtNum(stats.valid||0)}{prevMeta?.rowCount ? <span style={{ color:C.muted }}> (hiện tại {fmtNum(prevMeta.rowCount)})</span> : null}</td></tr>
+              <tr><td style={{ ...s.td, color:C.dim }}>Dòng bị bỏ</td><td style={s.tdNum}>{fmtNum(stats.skipped||0)}</td></tr>
+              <tr><td style={{ ...s.td, color:C.dim }}>Số chi nhánh</td><td style={s.tdNum}>{fmtNum(stats.branches||0)}</td></tr>
+              <tr><td style={{ ...s.td, color:C.dim }}>Tổng tồn</td><td style={s.tdNum}>{fmtNum(stats.qtySum||0)}{prevMeta?.qtySum ? <span style={{ color:C.muted }}> (hiện tại {fmtNum(Number(prevMeta.qtySum))})</span> : null}</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        {rows.length > 0 && (
+          <div style={{ overflowX:"auto", marginBottom:12 }}>
+            <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>10 dòng đầu sau khi đọc:</div>
+            <table style={{ ...s.table, fontSize:10.5 }}>
+              <thead><tr>{FIELD_LABELS.map(([k,l])=><th key={k} style={s.th}>{l}</th>)}</tr></thead>
+              <tbody>
+                {rows.slice(0,10).map((r,i)=>(
+                  <tr key={i}>{FIELD_LABELS.map(([k])=><td key={k} style={k==="cuoiKy"?s.tdNum:s.td}>{k==="cuoiKy"?fmtNum(r[k]):r[k]}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {skipped.length > 0 && (
+          <div style={{ fontSize:10.5, color:C.dim, marginBottom:12 }}>
+            Ví dụ dòng bị bỏ: {skipped.slice(0,5).map(x=>`dòng ${x.rowIndex + 1} (${x.reason})`).join("; ")}{skipped.length>5?"…":""}
+          </div>
+        )}
+
+        {!blocked && (
+          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+            <input style={{ ...s.searchInput, flex:1 }} placeholder="Tên người upload" value={uploader} onChange={e=>setUploader(e.target.value)}/>
+            <input style={{ ...s.searchInput, flex:1 }} type="password" placeholder="Mã upload" value={code} onChange={e=>setCode(e.target.value)}/>
+          </div>
+        )}
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
           <button style={s.btnS} onClick={onCancel}>Hủy</button>
-          <button style={{ ...s.btnP(false), background:C.red }} onClick={onConfirm}>Xóa</button>
+          {!blocked && <button style={s.btnP(!canSubmit)} disabled={!canSubmit} onClick={()=>onConfirm({ code:code.trim(), uploader:uploader.trim() })}>Upload {fmtNum(stats.valid||0)} dòng</button>}
         </div>
       </div>
     </div>
@@ -618,14 +552,12 @@ function SortableResultTable({ rows, needQty }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [fileList, setFileList]       = useState([]);
-  const [activeFileId, setActiveFileId] = useState(null);
   const [activeRows, setActiveRows]   = useState([]);
-  const [loadingFile, setLoadingFile] = useState(null);
+  const [meta, setMeta]               = useState(null); // stock_meta của bản đang hiển thị
   const [uploading, setUploading]     = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ done:0, total:0 });
+  const [preview, setPreview]         = useState(null); // { fileName, result } — chờ xác nhận upload
   const [dragging, setDragging]       = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const fileRef = useRef();
   const [tab, setTab] = useState("lookup");
 
@@ -640,67 +572,37 @@ export default function App() {
   const [exportToast, setExportToast] = useState("");
   const [coverageResults, setCoverageResults] = useState(null);
 
-  const [syncState, setSyncState] = useState("idle"); // idle|syncing|saving|done|error
-  const [syncCount, setSyncCount] = useState(0);
-  const [dataTs, setDataTs]       = useState(() => localStorage.getItem(LS_SB_UPDATED));
+  // Trạng thái đồng bộ do stockSync báo: idle|checking|downloading|saving|ready|offline|error|uploading-elsewhere
+  const [sync, setSync] = useState({ state:"idle" });
   const [provinces, setProvinces] = useState([]);
   const [branches,  setBranches]  = useState([]);
   const [pendingSearch, setPendingSearch] = useState(null);
-  const activeRowsRef = useRef([]); // ref để _applyRequest đọc activeRows mà không cần effect
+  const [skuIndex, setSkuIndex] = useState(() => buildSkuIndex([]));
+  const skuIndexRef = useRef(skuIndex); // để _applyRequest đọc index mà không cần effect
 
-  const _applyRows = useCallback((rows) => {
-    activeRowsRef.current = rows;
+  const _applyRows = useCallback((rows, newMeta) => {
+    const index = buildSkuIndex(rows);
+    skuIndexRef.current = index;
+    setSkuIndex(index);
     setActiveRows(rows);
+    if (newMeta !== undefined) setMeta(newMeta);
     setProvinces([...new Set(rows.map(r=>r.tinhThanh).filter(Boolean))].sort());
     setBranches([...new Set(rows.map(r=>r.chiNhanh).filter(Boolean))].sort((a,b)=>
       isNaN(a)||isNaN(b)?a.localeCompare(b):Number(a)-Number(b)));
   }, []);
 
-  const _loadFromCache = useCallback(async () => {
-    const cached = await cacheReadAll();
-    if (cached.length) {
-      _applyRows(cached.map(r => ({
-        maHang: r.ma_hang, tenHang: r.ten_hang, chiNhanh: r.chi_nhanh,
-        tinhThanh: r.tinh_thanh, maKho: r.ma_kho, dvt: r.dvt, cuoiKy: r.cuoi_ky,
-      })));
-      setActiveFileId("__supabase__");
-      setDataTs(localStorage.getItem(LS_SB_UPDATED));
-    }
+  const syncBusy = ["checking","downloading","saving"].includes(sync.state);
+
+  const forceResync = useCallback(async () => {
+    try {
+      const r = await syncIfStale({ force:true });
+      _applyRows(r.rows, r.meta);
+    } catch {} // lỗi đã được báo qua trạng thái sync
   }, [_applyRows]);
 
-  const forceResync = useCallback(() => {
-    localStorage.removeItem(LS_CACHE_TS);
-    _syncProgressCb = (n) => setSyncCount(n);
-    setSyncState("syncing"); setSyncCount(0); setActiveRows([]); setActiveFileId(null);
-    syncCacheIfNeeded()
-      .then(async () => { _syncProgressCb = null; await _loadFromCache(); setSyncState("done"); })
-      .catch(() => { _syncProgressCb = null; setSyncState("error"); });
-  }, [_loadFromCache]);
-
-  const _runAutoSearch = useCallback((items, rows) => {
-    // Tab 1: Tra cứu mã hàng
-    const map = {};
-    items.forEach(it => {
-      map[it.maHang] = { rows: rows.filter(r=>r.maHang.toUpperCase()===it.maHang), needQty:it.needQty, tenHang:it.tenHang, dvt:it.dvt };
-    });
-    setResults({ items, map });
-    // Tab 2: Kiểm tra chi nhánh
-    const thresholds = {};
-    items.forEach(it => { thresholds[it.maHang] = it.needQty===''?0:Number(it.needQty); });
-    const codes = items.map(it=>it.maHang);
-    const branchMap = {};
-    rows.forEach(r => {
-      const key = r.chiNhanh+"||"+r.tinhThanh;
-      if (!branchMap[key]) branchMap[key]={ chiNhanh:r.chiNhanh, tinhThanh:r.tinhThanh, qtyMap:{} };
-      const code = r.maHang.toUpperCase();
-      if (codes.includes(code)) branchMap[key].qtyMap[code]=(branchMap[key].qtyMap[code]||0)+parseQty(r.cuoiKy);
-    });
-    const covRows = Object.values(branchMap).map(b => {
-      const codeStatus = codes.map(c=>({ code:c, qty:b.qtyMap[c]||0, needed:thresholds[c]||0, ok:(b.qtyMap[c]||0)>=(thresholds[c]||0), info:items.find(it=>it.maHang===c) }));
-      const count = codeStatus.filter(cs=>cs.ok).length;
-      return { ...b, codeStatus, count, hasAll:count===codes.length };
-    }).sort((a,b)=>b.count-a.count||a.chiNhanh.localeCompare(b.chiNhanh));
-    setCoverageResults({ codes, rows:covRows, items });
+  const _runAutoSearch = useCallback((items, index) => {
+    setResults(computeLookup(items, index));        // Tab 1: Tra cứu mã hàng
+    setCoverageResults(computeCoverage(items, index)); // Tab 2: Kiểm tra chi nhánh
   }, []);
 
   const _applyRequest = useCallback((raw) => {
@@ -715,16 +617,19 @@ export default function App() {
     setLookupItems(mapped);
     setCoverItems(mapped);
     setTab("lookup");
-    if (activeRowsRef.current.length > 0) {
-      _runAutoSearch(mapped, activeRowsRef.current);
+    if (skuIndexRef.current.idx.size > 0) {
+      _runAutoSearch(mapped, skuIndexRef.current);
     } else {
       setPendingSearch(mapped);
     }
   }, [_runAutoSearch]);
 
   useEffect(() => {
-    dbListMeta().then(l => setFileList(l.sort((a,b)=>b.uploadedAt-a.uploadedAt))).catch(console.error);
-    loadBranchMap().catch(console.error);
+    let alive = true;
+    initStockSync({ getSb, onStatus: st => { if (alive) setSync(st); } });
+    loadBranchMap()
+      .then(() => { if (alive) setBranchCount(Object.keys(_branchMap).length); })
+      .catch(e => console.warn("Không tải được bảng chi nhánh:", e.message));
 
     // Đọc từ URL params (mở tab mới hoặc navigate tab cũ đều đọc đúng)
     const urlP = new URLSearchParams(window.location.search);
@@ -732,17 +637,21 @@ export default function App() {
     const skuParam   = urlP.get('sku');
     if (skuParam) {
       // ?sku=[{maHang,tenHang,dvt,needQty}] — tra cứu trực tiếp, không cần Supabase
-      try {
-        const items = JSON.parse(decodeURIComponent(skuParam));
-        if (Array.isArray(items) && items.length) _applyRequest(items);
-      } catch {}
+      // URLSearchParams đã giải mã 1 lần; chỉ giải mã thêm nếu link cũ bị mã hoá 2 lần
+      // (tên như "Cồn 70%" sẽ làm decodeURIComponent ném lỗi)
+      let items = null;
+      try { items = JSON.parse(skuParam); } catch {
+        try { items = JSON.parse(decodeURIComponent(skuParam)); } catch {}
+      }
+      if (Array.isArray(items) && items.length) _applyRequest(items);
+      else setExportToast("Link tra cứu không hợp lệ");
     } else if (orderParam) {
       // ?order=ECMxxxxxx — lấy cart từ Supabase orders table
       const sb = getSb();
       if (sb) {
         sb.from('orders').select('cart').eq('id', orderParam).single()
           .then(({ data, error }) => {
-            if (error || !Array.isArray(data?.cart)) return;
+            if (error || !Array.isArray(data?.cart)) { if (alive) setExportToast(`Không tải được đơn ${orderParam}`); return; }
             const items = data.cart
               .filter(p => p.sku && !p.promo)
               .map(p => ({ maHang: p.sku, tenHang: p.name || p.sku, dvt: p.unit || '', needQty: p.qty || 1 }));
@@ -751,40 +660,44 @@ export default function App() {
       }
     }
 
-    // Load IndexedDB ngay lập tức (không chờ Supabase check) → UI hiện nhanh
-    _loadFromCache().then(() => {
-      _syncProgressCb = (n) => { setSyncCount(n); setSyncState("syncing"); };
-      _savingCb = (n) => { setSyncCount(n); setSyncState("saving"); };
-      setSyncState("syncing");
-      syncCacheIfNeeded()
-        .then(async (synced) => {
-          _syncProgressCb = null; _savingCb = null;
-          setDataTs(localStorage.getItem(LS_SB_UPDATED));
-          if (synced) { await _loadFromCache(); setSyncState("done"); }
-          else setSyncState("idle");
-        })
-        .catch(() => { _syncProgressCb = null; _savingCb = null; setSyncState("error"); });
+    // Hiện ngay bản offline, rồi kiểm tra phiên bản trên máy chủ
+    (async () => {
+      try {
+        const cached = await loadCached();
+        if (alive && cached) _applyRows(cached.rows, cached.meta);
+      } catch (e) { console.warn("Không đọc được bản offline:", e.message); }
+      try {
+        const r = await syncIfStale();
+        if (!alive) return;
+        if (r.changed || skuIndexRef.current.idx.size === 0) _applyRows(r.rows, r.meta);
+        else setMeta(r.meta);
+      } catch {} // lỗi đã được báo qua trạng thái sync
+    })();
+
+    // Tab khác vừa đồng bộ/upload xong → nạp lại từ cache
+    const unsub = subscribe(async () => {
+      const cached = await loadCached().catch(() => null);
+      if (!alive || !cached) return;
+      _applyRows(cached.rows, cached.meta);
+      // Tab khác vừa upload xong → không còn "máy khác đang upload"
+      setSync(st => st.state === "uploading-elsewhere" ? { ...st, state:"ready", ...cached.meta } : st);
     });
-    return () => {};
-  }, [_loadFromCache, _applyRequest]);
+    return () => { alive = false; unsub(); };
+  }, [_applyRows, _applyRequest]);
 
-  // Auto-search khi activeRows vừa load xong (tab mới mở)
+  // Auto-search khi dữ liệu vừa load xong (tab mới mở)
   useEffect(() => {
-    if (!pendingSearch || !activeRows.length) return;
+    if (!pendingSearch || !skuIndex.idx.size) return;
     setPendingSearch(null);
-    _runAutoSearch(pendingSearch, activeRows);
-  }, [activeRows, pendingSearch, _runAutoSearch]);
-
-  const filteredRows = useMemo(() => activeRows.filter(r=>
-    (!filterProvince||r.tinhThanh===filterProvince)&&(!filterBranch||r.chiNhanh===filterBranch)
-  ), [activeRows, filterProvince, filterBranch]);
+    _runAutoSearch(pendingSearch, skuIndex);
+  }, [skuIndex, pendingSearch, _runAutoSearch]);
 
   // Build catalog from rows for dvt lookup
   const catalog = useMemo(() => {
     const map = {};
-    activeRows.forEach(r => { if (r.maHang && !map[r.maHang]) map[r.maHang] = { tenHang:r.tenHang, dvt:r.dvt }; });
+    for (const [code, list] of skuIndex.idx) map[code] = { tenHang:list[0].tenHang, dvt:list[0].dvt };
     return map;
-  }, [activeRows]);
+  }, [skuIndex]);
 
   // ── Xuất sang v2.html (Lập báo giá) ──
   const exportToInvoice = (items) => {
@@ -795,7 +708,7 @@ export default function App() {
       dvt:     it.dvt || '',
       needQty: it.needQty !== '' && it.needQty != null ? Number(it.needQty) : 1,
     }));
-    localStorage.setItem('tsp_order_request', JSON.stringify(payload));
+    lsSet('tsp_order_request', JSON.stringify(payload));
     // v2.html nằm cùng cấp hoặc một cấp trên — tự detect theo URL hiện tại
     const base = window.location.href
       .replace(/\/inventory-lookup(\/.*)?$/, '/')
@@ -805,28 +718,58 @@ export default function App() {
     setTimeout(() => setExportToast(""), 3000);
   };
 
-  const handleUpload = useCallback(async (file) => {
-    if (!file) return;
-    setUploading(true);
+  // Bước 1: đọc & kiểm tra file → mở màn hình xem trước (chưa ghi gì lên máy chủ)
+  const handleUpload = useCallback((file) => {
+    if (!file || uploading) return;
     const reader = new FileReader();
-    reader.onload = async e => {
+    reader.onload = e => {
       try {
-        const wb = XLSX.read(e.target.result, { type:"array" });
-        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:"" });
-        const rows = normalizeRows(raw);
-        const id = `file_${Date.now()}`;
-        const meta = { id, name:file.name, rowCount:rows.length, uploadedAt:Date.now(), sizeBytes:file.size };
-        setUploadProgress({ done:0, total:rows.length });
-        await dbSave(meta, rows, (done, total) => setUploadProgress({ done, total }));
-        setFileList(prev => [meta,...prev]);
-        setActiveFileId(id); setActiveRows(rows);
-        setResults(null); setCoverageResults(null);
-        setLookupItems([]); setCoverItems([]);
-      } catch(err) { alert("Không đọc được file\n"+err.message); }
-      setUploading(false);
+        // raw:true — file .xls xuất từ ERP thực chất là HTML; không để SheetJS tự đoán số ("1.234", "00100")
+        const wb = XLSX.read(e.target.result, { type:"array", raw:true });
+        const previousMeta = meta ? { ...meta, branches:branches.length } : null;
+        const result = analyzeWorkbook(wb, XLSX, { branchMap:_branchMap, previousMeta });
+        setPreview({ fileName:file.name, result });
+      } catch(err) { alert("Không đọc được file Excel\n"+err.message); }
     };
+    reader.onerror = () => alert("Không đọc được file");
     reader.readAsArrayBuffer(file);
-  }, []);
+  }, [uploading, meta, branches]);
+
+  // Bước 2: người dùng xác nhận → upload vào bảng tạm rồi chuyển sang bảng chính
+  const confirmUpload = useCallback(async ({ code, uploader }) => {
+    const { fileName, result } = preview;
+    setPreview(null);
+    setUploading(true);
+    setUploadProgress({ done:0, total:result.rows.length });
+    try {
+      const newMeta = await uploadStock({
+        code, rows:result.rows, uploader, fileName,
+        onProgress:(done, total) => setUploadProgress({ done, total }),
+      });
+      saveUploadCode(code);
+      lsSet(LS_UPLOADER, uploader);
+      _applyRows(result.rows, newMeta);
+      setResults(null); setCoverageResults(null);
+      alert(`Đã cập nhật ${fmtNum(newMeta.rowCount ?? result.rows.length)} dòng tồn kho.`);
+    } catch(err) {
+      if (err.code === "bad_code") {
+        clearUploadCode();
+        setPreview({ fileName, result }); // mở lại để nhập lại mã, không phải đọc lại file
+      }
+      alert("Upload không thành công — dữ liệu đang dùng trên máy chủ không bị thay đổi.\n\n"+err.message);
+    }
+    setUploading(false);
+  }, [preview, _applyRows]);
+
+  // Dữ liệu vừa đổi (sync bản mới, tab khác upload) → tính lại kết quả đang hiển thị
+  const lastIndexRef = useRef(skuIndex);
+  useEffect(() => {
+    if (lastIndexRef.current === skuIndex) return;
+    lastIndexRef.current = skuIndex;
+    const keep = b => (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch);
+    setResults(r => r ? computeLookup(r.items, skuIndex, keep) : r);
+    setCoverageResults(r => r ? computeCoverage(r.items, skuIndex, keep) : r);
+  }, [skuIndex, filterProvince, filterBranch]);
 
   const branchFileRef = useRef();
   const [branchUploading, setBranchUploading] = useState(false);
@@ -840,14 +783,18 @@ export default function App() {
       try {
         const wb = XLSX.read(e.target.result, { type:"array" });
         const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:"" });
-        const norm = s => s.toLowerCase().replace(/[\s_]+/g,"");
-        const rows = raw.map(r => {
-          const keys = Object.keys(r);
-          const get = ps => { const k=keys.find(k=>ps.some(p=>norm(k).includes(norm(p)))); return k?String(r[k]).trim():""; };
-          return { chi_nhanh: get(["chi nhanh","chinhanh","branch"]), tinh_thanh: get(["tinh thanh","tinhthanh","province","tinh"]) };
-        }).filter(r => r.chi_nhanh && r.tinh_thanh);
+        const norm = s => normHeader(s).replace(/\s+/g,"");
+        // Chọn cột 1 lần: khớp chính xác trước, sau đó mới "chứa"; bỏ cột mã ("Mã chi nhánh")
+        const keys = Object.keys(raw[0] || {});
+        const pick = ps => keys.find(k => ps.some(p => norm(k)===norm(p)))
+          || keys.find(k => !norm(k).startsWith("ma") && ps.some(p => norm(k).includes(norm(p))));
+        const kCN = pick(["chi nhanh","ten chi nhanh","branch"]), kTT = pick(["tinh thanh","tinh","province"]);
+        const rows = (kCN && kTT ? raw : []).map(r => ({ chi_nhanh:String(r[kCN]).trim(), tinh_thanh:String(r[kTT]).trim() }))
+          .filter(r => r.chi_nhanh && r.tinh_thanh);
         if (!rows.length) { alert("Không tìm thấy cột chi nhánh / tỉnh thành"); setBranchUploading(false); return; }
-        await saveBranchMap(rows);
+        const code = await askUploadCode();
+        if (!code) { setBranchUploading(false); return; }
+        await saveBranchMap(rows, code);
         setBranchCount(Object.keys(_branchMap).length);
         alert(`Đã cập nhật ${rows.length} chi nhánh`);
       } catch(err) { alert("Lỗi: " + err.message); }
@@ -855,26 +802,6 @@ export default function App() {
     };
     reader.readAsArrayBuffer(file);
   }, []);
-
-  const selectFile = useCallback(async (id) => {
-    if (id===activeFileId) return;
-    setLoadingFile(id);
-    try {
-      const rows = await dbLoad(id);
-      setActiveFileId(id); setActiveRows(rows);
-      setResults(null); setCoverageResults(null);
-      setLookupItems([]); setCoverItems([]);
-      setFilterProvince(""); setFilterBranch("");
-    } catch(err) { alert("Lỗi: "+err.message); }
-    setLoadingFile(null);
-  }, [activeFileId]);
-
-  const deleteFile = useCallback(async (id) => {
-    await dbDelete(id);
-    setFileList(prev => prev.filter(f=>f.id!==id));
-    if (activeFileId===id) { setActiveFileId(null); setActiveRows([]); setResults(null); setCoverageResults(null); }
-    setDeleteConfirm(null);
-  }, [activeFileId]);
 
   // Add product to lookup
   const addLookupItem = (p) => {
@@ -910,62 +837,21 @@ export default function App() {
     setCoverManual("");
   };
 
+  const keepFilter = b => (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch);
+
   // Search
   const doSearch = () => {
     if (!activeRows.length || lookupItems.length===0) return;
-    const map = {};
-    lookupItems.forEach(it => {
-      map[it.maHang] = {
-        rows: filteredRows.filter(r => r.maHang.toUpperCase()===it.maHang),
-        needQty: it.needQty,
-        tenHang: it.tenHang,
-        dvt: it.dvt,
-      };
-    });
-    setResults({ items: lookupItems, map });
+    setResults(computeLookup(lookupItems, skuIndex, keepFilter));
   };
 
   // Coverage
   const doCoverage = () => {
     if (!activeRows.length || coverItems.length===0) return;
-    // per item threshold
-    const thresholds = {}; // maHang -> needQty
-    coverItems.forEach(it => { thresholds[it.maHang] = it.needQty==='' ? 0 : Number(it.needQty); });
-    const codes = coverItems.map(it=>it.maHang);
-
-    const branchMap = {};
-    activeRows.forEach(r => {
-      const key = r.chiNhanh+"||"+r.tinhThanh;
-      if (!branchMap[key]) branchMap[key] = { chiNhanh:r.chiNhanh, tinhThanh:r.tinhThanh, qtyMap:{} };
-      const code = r.maHang.toUpperCase();
-      if (codes.includes(code)) {
-        const qty = parseQty(r.cuoiKy);
-        branchMap[key].qtyMap[code] = (branchMap[key].qtyMap[code]||0) + qty;
-      }
-    });
-
-    const filtered = Object.values(branchMap).filter(b =>
-      (!filterProvince||b.tinhThanh===filterProvince)&&(!filterBranch||b.chiNhanh===filterBranch)
-    );
-
-    const rows = filtered.map(b => {
-      const codeStatus = codes.map(c => ({
-        code: c,
-        qty: b.qtyMap[c]||0,
-        needed: thresholds[c]||0,
-        ok: (b.qtyMap[c]||0) >= (thresholds[c]||0),
-        info: coverItems.find(it=>it.maHang===c),
-      }));
-      const count = codeStatus.filter(cs=>cs.ok).length;
-      return { ...b, codeStatus, count, hasAll: count===codes.length };
-    }).sort((a,b) => b.count-a.count || a.chiNhanh.localeCompare(b.chiNhanh));
-
-    setCoverageResults({ codes, rows, items:coverItems });
+    setCoverageResults(computeCoverage(coverItems, skuIndex, keepFilter));
   };
 
-  const activeFile = activeFileId==="__supabase__"
-    ? { id:"__supabase__", name:"Dữ liệu Supabase" }
-    : fileList.find(f=>f.id===activeFileId);
+  const datasetName = meta?.fileName ? meta.fileName.replace(/.(xlsx|xls)$/i,"") : "Dữ liệu Supabase";
   const lookupAddedCodes = useMemo(()=>new Set(lookupItems.map(it=>it.maHang)), [lookupItems]);
   const coverAddedCodes  = useMemo(()=>new Set(coverItems.map(it=>it.maHang)), [coverItems]);
   const foundCount = results ? Object.values(results.map).filter(v=>v.rows.length>0).length : 0;
@@ -979,34 +865,22 @@ export default function App() {
         <div style={s.sidebar}>
           <div style={s.sbHead}>
             <div style={s.sbTitle}><div style={s.dot}/>Kho dữ liệu</div>
-            <div style={{ fontSize:10, color:"#7a9bbf", marginTop:4 }}>{fileList.length} lần import · Lưu trên Supabase</div>
-            <div style={{ fontSize:10, color:"#5a8aaa", marginTop:2 }}>Upload mới → ghi đè toàn bộ</div>
+            <div style={{ fontSize:10, color:"#7a9bbf", marginTop:4 }}>Lưu trên Supabase · có bản offline</div>
+            <div style={{ fontSize:10, color:"#5a8aaa", marginTop:2 }}>Upload mới → thay toàn bộ</div>
           </div>
           <div style={s.sbBody}>
-            {fileList.length===0 && activeRows.length===0 && <div style={{ padding:"24px 16px", textAlign:"center", color:"#7a9bbf", fontSize:11 }}>Chưa có file nào</div>}
-            {(activeFileId==="__supabase__" || syncState==="syncing") && (
-              <div style={s.fileItem(activeFileId==="__supabase__")}>
+            {activeRows.length===0 && !meta?.version
+              ? <div style={{ padding:"24px 16px", textAlign:"center", color:"#7a9bbf", fontSize:11 }}>{syncBusy ? "Đang tải dữ liệu…" : "Chưa có dữ liệu"}</div>
+              : (
+              <div style={s.fileItem(true)}>
                 <span style={{ fontSize:16 }}>☁️</span>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={s.fileName(true)}>Dữ liệu Supabase</div>
-                  <div style={{ fontSize:10, color:"#7ecfab" }}>
-                    {activeRows.length.toLocaleString("vi-VN")} dòng · offline cache
-                  </div>
+                  <div style={s.fileName(true)}>{datasetName}</div>
+                  <div style={{ fontSize:10, color:"#7ecfab" }}>{activeRows.length.toLocaleString("vi-VN")} dòng · có bản offline</div>
+                  {meta?.publishedAt && <div style={{ ...s.fileMeta, fontSize:9 }}>Cập nhật {fmtTime(meta.publishedAt)}{meta.uploader ? ` · ${meta.uploader}` : ""}</div>}
                 </div>
               </div>
             )}
-            {fileList.map(f=>(
-              <div key={f.id} style={s.fileItem(f.id===activeFileId)} onClick={()=>selectFile(f.id)}>
-                <span style={{ fontSize:16 }}>{loadingFile===f.id?"⏳":f.id===activeFileId?"📗":"📄"}</span>
-                <div style={{ flex:1, overflow:"hidden" }}>
-                  <div style={s.fileName(f.id===activeFileId)}>{f.name.replace(/\.(xlsx|xls)$/i,"")}</div>
-                  <div style={s.fileMeta}>{f.rowCount.toLocaleString()} dòng · {fmtSize(f.sizeBytes)}</div>
-                  <div style={{ ...s.fileMeta, fontSize:9 }}>{new Date(f.uploadedAt).toLocaleDateString("vi-VN")}</div>
-                </div>
-                <button style={{ background:"none", border:"none", cursor:"pointer", color:"#7a9bbf", fontSize:14, padding:"2px 4px" }}
-                  onClick={e=>{e.stopPropagation();setDeleteConfirm(f.id);}}>×</button>
-              </div>
-            ))}
           </div>
           <div style={s.sbFoot}>
             <div style={{ border:`2px dashed ${dragging?"#7ecfab":"#2d5490"}`, borderRadius:8, padding:"16px 12px", marginBottom:0, textAlign:"center", cursor:"pointer", background:dragging?"#1a4a7a":"#1a3257", transition:"all 0.2s" }}
@@ -1032,7 +906,7 @@ export default function App() {
                   : <><span style={{color:"#c8e8ff", fontWeight:600}}>Cập nhật data</span><br/><span style={{color:"#7a9bbf"}}>Tải tồn kho mới trừ tích xuất ERP</span></>
                 }
               </div>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={e=>handleUpload(e.target.files[0])}/>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={e=>{handleUpload(e.target.files[0]); e.target.value="";}}/>
             </div>
             {/* Upload bảng chi nhánh */}
             <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #16304f" }}>
@@ -1046,7 +920,7 @@ export default function App() {
                 style={{ width:"100%", padding:"6px 8px", background:"#16304f", border:"1px solid #1e4a7a", borderRadius:6, color:"#c8e8ff", fontSize:11, cursor:"pointer" }}>
                 {branchUploading ? "Đang upload..." : "📂 Upload Excel chi nhánh"}
               </button>
-              <input ref={branchFileRef} type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={e=>handleBranchUpload(e.target.files[0])}/>
+              <input ref={branchFileRef} type="file" accept=".xlsx,.xls" style={{ display:"none" }} onChange={e=>{handleBranchUpload(e.target.files[0]); e.target.value="";}}/>
             </div>
           </div>
         </div>
@@ -1055,34 +929,33 @@ export default function App() {
         <div style={s.main}>
           <div style={s.topbar}>
             <span style={{ fontSize:12, fontWeight:700, color:"#7ecfab", letterSpacing:"0.08em", textTransform:"uppercase" }}>📦 Tra cứu tồn kho</span>
-            {activeFile && <>
+            {activeRows.length>0 && <>
               <span style={{ color:"#7a9bbf", fontSize:12 }}>·</span>
-              <span style={{ fontSize:12, color:"#c8e8ff", fontWeight:600 }}>{activeFile.name}</span>
-              <span style={{ fontSize:11, color:"#7a9bbf" }}>{activeRows.length.toLocaleString()} dòng</span>
+              <span style={{ fontSize:12, color:"#c8e8ff", fontWeight:600 }}>{datasetName}</span>
+              <span style={{ fontSize:11, color:"#7a9bbf" }}>{activeRows.length.toLocaleString("vi-VN")} dòng</span>
             </>}
             <div style={{ marginLeft:"auto", fontSize:11, color:"#7a9bbf", display:"flex", alignItems:"center", gap:8 }}>
-              {dataTs && (
-                <span style={{ fontSize:10, color:"#5a8aaa" }} title="Ngày dữ liệu tồn kho trên Supabase">
-                  📅 Data: {new Date(dataTs).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",timeZone:"Asia/Ho_Chi_Minh"})}
+              {meta?.publishedAt && (
+                <span style={{ fontSize:10, color:"#5a8aaa" }} title="Thời điểm bản dữ liệu đang xem được đưa lên máy chủ">
+                  📅 Data: {fmtTime(meta.publishedAt)}
                 </span>
               )}
-              {syncState==="syncing" && <><span style={{ width:8, height:8, borderRadius:"50%", background:"#f59e0b", display:"inline-block", animation:"pulse 1s infinite" }}/> Đang tải{syncCount>0?` ${syncCount.toLocaleString("vi-VN")} dòng`:""}...</>}
-              {syncState==="saving"  && <><span style={{ width:8, height:8, borderRadius:"50%", background:"#60a5fa", display:"inline-block", animation:"pulse 1s infinite" }}/> Đang lưu {syncCount.toLocaleString("vi-VN")} dòng...</>}
-              {syncState==="done"    && <><span style={{ width:8, height:8, borderRadius:"50%", background:"#7ecfab", display:"inline-block" }}/> Đã tải {activeRows.length.toLocaleString("vi-VN")} dòng</>}
-              {syncState==="error"   && <><span style={{ width:8, height:8, borderRadius:"50%", background:"#f87171", display:"inline-block" }}/> Lỗi sync</>}
-              {syncState==="idle" && activeRows.length>0 && <><span style={{ width:8, height:8, borderRadius:"50%", background:"#7ecfab", display:"inline-block" }}/> {activeRows.length.toLocaleString("vi-VN")} dòng offline</>}
+              <SyncBadge sync={sync} rowCount={activeRows.length}/>
               <button
                 onClick={forceResync}
-                disabled={syncState==="syncing" || syncState==="saving"}
+                disabled={syncBusy || uploading}
                 title="Tải lại toàn bộ từ Supabase"
-                style={{ padding:"3px 8px", background:"#16304f", border:"1px solid #3a6a9a", borderRadius:4, color: (syncState==="syncing"||syncState==="saving") ? "#3a6a9a" : "#7ecfab", fontSize:10, fontWeight:700, cursor: (syncState==="syncing"||syncState==="saving") ? "default" : "pointer" }}
+                style={{ padding:"3px 8px", background:"#16304f", border:"1px solid #3a6a9a", borderRadius:4, color: syncBusy ? "#3a6a9a" : "#7ecfab", fontSize:10, fontWeight:700, cursor: syncBusy ? "default" : "pointer" }}
               >&#x21BA; Làm mới</button>
             </div>
           </div>
 
           <div style={s.content}>
-            {!activeFileId ? (
-              <div style={s.empty}><div style={s.emptyIcon}>👈</div><div>Chọn file từ danh sách bên trái<br/><span style={{fontSize:11,color:C.muted}}>hoặc upload file mới để bắt đầu</span></div></div>
+            {activeRows.length===0 ? (
+              <div style={s.empty}><div style={s.emptyIcon}>{syncBusy ? "⏳" : "📭"}</div><div>
+                {syncBusy ? "Đang tải dữ liệu tồn kho…" : sync.state==="offline" ? "Không kết nối được máy chủ và chưa có bản offline" : "Chưa có dữ liệu tồn kho"}
+                <br/><span style={{fontSize:11,color:C.muted}}>{syncBusy ? "Lần đầu có thể mất vài phút" : "Upload file Excel ở cột bên trái để bắt đầu"}</span>
+              </div></div>
             ) : (
               <>
                 <div style={s.tabs}>
@@ -1325,12 +1198,8 @@ export default function App() {
         </div>
       </div>
 
-      {deleteConfirm && (
-        <ConfirmModal
-          message={`Xóa file "${fileList.find(f=>f.id===deleteConfirm)?.name}"?\nDữ liệu sẽ được giải phóng khỏi bộ nhớ trình duyệt.`}
-          onConfirm={()=>deleteFile(deleteConfirm)}
-          onCancel={()=>setDeleteConfirm(null)}
-        />
+      {preview && (
+        <UploadPreviewModal preview={preview} prevMeta={meta} onCancel={()=>setPreview(null)} onConfirm={confirmUpload}/>
       )}
 
       {exportToast && (

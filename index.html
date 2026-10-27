@@ -1205,7 +1205,10 @@ table.qt tbody tr:hover .qt-del-btn{opacity:1}
         </div>
         <div>
           <div style="font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:6px">SQL Schema — chạy 1 lần trong Supabase SQL Editor:</div>
-          <pre class="sql-block">-- Chạy toàn bộ script này 1 lần trong Supabase SQL Editor
+          <pre class="sql-block">-- Chạy toàn bộ script này trong Supabase SQL Editor (chạy lại nhiều lần vẫn an toàn)
+-- Phần đồng bộ tồn kho (stock_meta, bảng staging, mã upload, các RPC
+-- stock_*, inventory_replace, branches_upsert, upload_code_check):
+--   chạy thêm file supabase/sync_overhaul_phase1.sql trong repo.
 CREATE TABLE IF NOT EXISTS employees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL, phone TEXT DEFAULT '',
@@ -1238,6 +1241,28 @@ CREATE TABLE IF NOT EXISTS inventory (
   price NUMERIC DEFAULT 0, unit TEXT DEFAULT 'Sp',
   stock INTEGER DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Các cột danh mục mà chức năng Import danh mục ghi vào:
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS barcode TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS active_ingredient TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS base_unit TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS vat NUMERIC DEFAULT 0;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS manufacturer TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS country TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS category TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS product_type TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS buy_price NUMERIC DEFAULT 0;
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS buy_unit TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS registration_no TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS importer TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS brand_name TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS brand_code TEXT DEFAULT '';
+ALTER TABLE inventory ADD COLUMN IF NOT EXISTS status TEXT DEFAULT '';
+-- Bảng chi nhánh → tỉnh thành (dùng bởi Tra cứu tồn kho)
+CREATE TABLE IF NOT EXISTS branches (
+  chi_nhanh TEXT PRIMARY KEY,
+  tinh_thanh TEXT DEFAULT ''
+);
 -- Thêm cột mới nếu đã tồn tại bảng orders cũ:
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'quoted';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS erp_code TEXT DEFAULT '';
@@ -1264,13 +1289,25 @@ ALTER TABLE orders    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE shipping_providers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anon_all" ON employees FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all" ON orders    FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all" ON inventory FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all" ON pharmacies FOR ALL TO anon USING (true) WITH CHECK (true);
-CREATE POLICY "anon_all" ON shipping_providers FOR ALL TO anon USING (true) WITH CHECK (true);
 ALTER TABLE stock_by_branch ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "anon_all" ON stock_by_branch FOR ALL TO anon USING (true) WITH CHECK (true);</pre>
+ALTER TABLE branches  ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "anon_all" ON employees;
+CREATE POLICY "anon_all" ON employees FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "anon_all" ON orders;
+CREATE POLICY "anon_all" ON orders    FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "anon_all" ON pharmacies;
+CREATE POLICY "anon_all" ON pharmacies FOR ALL TO anon USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "anon_all" ON shipping_providers;
+CREATE POLICY "anon_all" ON shipping_providers FOR ALL TO anon USING (true) WITH CHECK (true);
+-- inventory, stock_by_branch, branches: anon chỉ đọc; ghi qua RPC có mã upload
+-- (xem supabase/sync_overhaul_phase1.sql). Policy anon_all cũ của 3 bảng này
+-- sẽ được thu hồi bởi supabase/sync_overhaul_phase2.sql — không tạo lại ở đây.
+DROP POLICY IF EXISTS "anon_select" ON inventory;
+CREATE POLICY "anon_select" ON inventory FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "anon_select" ON stock_by_branch;
+CREATE POLICY "anon_select" ON stock_by_branch FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "anon_select" ON branches;
+CREATE POLICY "anon_select" ON branches FOR SELECT TO anon USING (true);</pre>
         </div>
       </div>
     </div>
@@ -1540,29 +1577,54 @@ function _sbRowToInv(r) {
   return { maHang:r.ma_hang, tenHang:r.ten_hang, chiNhanh:r.chi_nhanh, tinhThanh:r.tinh_thanh, maKho:r.ma_kho, dvt:r.dvt, cuoiKy:r.cuoi_ky };
 }
 
-async function invLookupSku(sku) {
-  if (!sku) return [];
-  const sb = getSb();
-  if (!sb) return [];
-  try {
-    const { data } = await sb.from('stock_by_branch').select('*').ilike('ma_hang', sku).limit(100);
-    return (data||[]).map(_sbRowToInv);
-  } catch { return []; }
+const _INV_COLS = 'id,ma_hang,ten_hang,chi_nhanh,tinh_thanh,ma_kho,dvt,cuoi_ky';
+const _invKey = s => String(s ?? '').trim().toUpperCase();
+
+// Đọc hết mọi trang (PostgREST cắt ở 1000 dòng/lần). Lỗi Supabase → ném lỗi (KHÔNG coi là hết hàng).
+async function _invFetchAll(buildQuery) {
+  const PAGE = 1000;
+  const all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await buildQuery().order('id').range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message || 'Lỗi truy vấn tồn kho');
+    if (data) all.push(...data);
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
 }
 
-async function invLookupSkus(skus) {
-  if (!skus.length) return {};
+// → mảng dòng tồn của 1 mã. Ném lỗi khi không kết nối / truy vấn lỗi.
+async function invLookupSku(sku) {
+  const key = _invKey(sku);
+  if (!key) return [];
   const sb = getSb();
-  if (!sb) return {};
-  try {
-    const { data } = await sb.from('stock_by_branch').select('*').in('ma_hang', skus).limit(2000);
-    const out = {};
-    (data||[]).forEach(r => {
-      const key = r.ma_hang.toLowerCase();
-      (out[key] = out[key]||[]).push(_sbRowToInv(r));
+  if (!sb) throw new Error('Chưa kết nối Supabase');
+  // .in với bản UPPER/gốc/thường để dùng được index ma_hang (ilike phải quét cả bảng 510k dòng)
+  const src = String(sku).trim();
+  const vals = [...new Set([key, src, src.toLowerCase()])];
+  const data = await _invFetchAll(() => sb.from('stock_by_branch').select(_INV_COLS).in('ma_hang', vals));
+  return data.map(_sbRowToInv);
+}
+
+// → { MÃ_UPPERCASE: [dòng tồn...] }. Ném lỗi khi không kết nối / truy vấn lỗi.
+async function invLookupSkus(skus) {
+  const src = (skus || []).map(s => String(s ?? '').trim()).filter(Boolean);
+  if (!src.length) return {};
+  const sb = getSb();
+  if (!sb) throw new Error('Chưa kết nối Supabase');
+  // .in phân biệt hoa/thường → hỏi cả bản UPPER lẫn bản gốc (và thường) để khớp dữ liệu cũ
+  const vals = [...new Set(src.flatMap(s => [s.toUpperCase(), s, s.toLowerCase()]))];
+  const BATCH = 100;
+  const out = {};
+  for (let i = 0; i < vals.length; i += BATCH) {
+    const part = vals.slice(i, i + BATCH);
+    const data = await _invFetchAll(() => sb.from('stock_by_branch').select(_INV_COLS).in('ma_hang', part));
+    data.forEach(r => {
+      const key = _invKey(r.ma_hang);
+      (out[key] = out[key] || []).push(_sbRowToInv(r));
     });
-    return out;
-  } catch { return {}; }
+  }
+  return out;
 }
 function setConfig(c) { localStorage.setItem('tsp_v2_config', JSON.stringify(c)); }
 
@@ -1754,7 +1816,10 @@ async function saveEmployee() {
 async function deleteEmployee(id) {
   if (!confirm('Xoá nhân viên này?')) return;
   const sb = getSb();
-  if (sb) { await sb.from('employees').delete().eq('id', id); }
+  if (sb) {
+    const { error } = await sb.from('employees').delete().eq('id', id);
+    if (error) { toast('Lỗi xoá nhân viên: ' + error.message, 'error'); return; }
+  }
   else { employees = employees.filter(e => e.id !== id); }
   await loadEmployees();
   toast('Đã xoá nhân viên', 'info');
@@ -1769,16 +1834,17 @@ let inventoryCache = {};
 async function loadInventory() {
   const sb = getSb();
   if (!sb) return;
-  inventoryCache = {};
+  const next = {};
   const PAGE = 1000;
   let from = 0, done = false;
   while (!done) {
-    const { data, error } = await sb.from('inventory').select('*').range(from, from + PAGE - 1);
-    if (error || !data) break;
-    data.forEach(r => { inventoryCache[r.sku.toLowerCase()] = r; });
+    const { data, error } = await sb.from('inventory').select('*').order('sku').range(from, from + PAGE - 1);
+    if (error || !data) { console.warn('loadInventory', error); toast('Không tải đủ danh mục sản phẩm (lỗi kết nối)', 'error'); return; }
+    data.forEach(r => { next[r.sku.toLowerCase()] = r; });
     done = data.length < PAGE;
     from += PAGE;
   }
+  inventoryCache = next;
   document.getElementById('invCacheCount').textContent = Object.keys(inventoryCache).length;
 }
 
@@ -1875,6 +1941,12 @@ function parseInvRows(raw) {
     });
   });
 
+  // Khử trùng SKU (không phân biệt hoa/thường) — giữ dòng xuất hiện sau cùng
+  const _bySku = new Map();
+  pendingInvRows.forEach(r => { const k = r.sku.toLowerCase(); _bySku.delete(k); _bySku.set(k, r); });
+  const dupCount = pendingInvRows.length - _bySku.size;
+  pendingInvRows = [..._bySku.values()];
+
   const tbody = document.getElementById('invPreviewBody');
   tbody.innerHTML = pendingInvRows.slice(0,50).map(r => `
     <tr>
@@ -1885,13 +1957,21 @@ function parseInvRows(raw) {
       <td style="font-size:11px;color:var(--text-2)">${(r.active_ingredient||'').replace(/</g,'&lt;').slice(0,40)||'—'}</td>
     </tr>`).join('');
   document.getElementById('invPreviewCount').textContent = pendingInvRows.length;
-  document.getElementById('invSkipCount').textContent = skipped ? `Bỏ qua ${skipped} dòng thiếu dữ liệu` : '';
+  document.getElementById('invSkipCount').textContent = [
+    skipped ? `Bỏ qua ${skipped} dòng thiếu dữ liệu` : '',
+    dupCount ? `Gộp ${dupCount} dòng trùng SKU (giữ dòng cuối)` : ''
+  ].filter(Boolean).join(' · ');
   document.getElementById('invPreviewWrap').style.display = 'block';
-  toast(`Đọc được ${pendingInvRows.length} sản phẩm — kiểm tra rồi xác nhận`, 'info');
+  toast(`Đọc được ${pendingInvRows.length} sản phẩm${dupCount ? ` (gộp ${dupCount} dòng trùng SKU)` : ''} — kiểm tra rồi xác nhận`, 'info');
 }
 
+let _invImporting = false;
 async function confirmInvImport() {
-  if (!pendingInvRows.length) return;
+  if (!pendingInvRows.length || _invImporting) return; // chặn bấm đúp
+  _invImporting = true;
+  try { await _confirmInvImport(); } finally { _invImporting = false; }
+}
+async function _confirmInvImport() {
   const sb = getSb();
   if (!sb) {
     inventoryCache = {};
@@ -1901,23 +1981,48 @@ async function confirmInvImport() {
     closeInvModal();
     return;
   }
-  // Xoá toàn bộ danh mục cũ
-  const { error: delErr } = await sb.from('inventory').delete().not('sku', 'is', null);
-  if (delErr) { toast('Lỗi xoá danh mục cũ: ' + delErr.message, 'error'); return; }
+  // Mã upload (nhớ trong phiên)
+  const code = await _getUploadCode(sb);
+  if (!code) return;
 
-  // Insert toàn bộ dữ liệu mới theo chunk
-  const CHUNK = 200;
-  let total = 0, errMsg = '';
-  for (let i = 0; i < pendingInvRows.length; i += CHUNK) {
-    const chunk = pendingInvRows.slice(i, i + CHUNK);
-    const { error } = await sb.from('inventory').insert(chunk);
-    if (error) { errMsg = error.message; break; }
-    total += chunk.length;
+  // Thay toàn bộ danh mục trong 1 transaction phía server (RPC inventory_replace)
+  let data, error;
+  try { ({ data, error } = await sb.rpc('inventory_replace', { p_code: code, p_rows: pendingInvRows })); }
+  catch (e) { error = { message: e.message || String(e) }; }
+  if (error) {
+    const msg = String(error.message || '');
+    if (msg.includes('bad_code')) {
+      _clearUploadCode();
+      toast('Mã upload không đúng — danh mục chưa thay đổi', 'error');
+    } else if (error.code === 'PGRST202' || (/inventory_replace/.test(msg) && /not find|does not exist/i.test(msg))) {
+      toast('Server chưa có hàm inventory_replace — chạy supabase/sync_overhaul_phase1.sql trước', 'error');
+    } else {
+      toast('Lỗi nhập danh mục (danh mục cũ giữ nguyên): ' + msg, 'error');
+    }
+    return;
   }
-  if (errMsg) { toast('Lỗi nhập danh mục: ' + errMsg, 'error'); return; }
   await loadInventory();
-  toast(`✅ Đã cập nhật danh mục: ${total} sản phẩm`, 'success');
+  toast(`✅ Đã cập nhật danh mục: ${typeof data === 'number' ? data : pendingInvRows.length} sản phẩm`, 'success');
   closeInvModal();
+}
+
+/* ── Mã upload (dùng cho các RPC ghi dữ liệu) ── */
+const UPLOAD_CODE_KEY = 'tsp_upload_code';
+function _clearUploadCode() { try { sessionStorage.removeItem(UPLOAD_CODE_KEY); } catch {} }
+async function _getUploadCode(sb) {
+  let code = '';
+  try { code = sessionStorage.getItem(UPLOAD_CODE_KEY) || ''; } catch {}
+  if (code) return code;
+  code = (prompt('Nhập mã upload để cập nhật dữ liệu lên server:') || '').trim();
+  if (!code) return '';
+  const { data: ok, error } = await sb.rpc('upload_code_check', { p_code: code });
+  if (error) {
+    toast('Không kiểm tra được mã upload: ' + error.message, 'error');
+    return '';
+  }
+  if (!ok) { _clearUploadCode(); toast('Mã upload không đúng', 'error'); return ''; }
+  try { sessionStorage.setItem(UPLOAD_CODE_KEY, code); } catch {}
+  return code;
 }
 
 /* ══ PROPER CASE ══ */
@@ -2230,7 +2335,16 @@ async function showSKUResult(d) {
   if (!invEl) return;
   invEl.style.display = 'block';
   invEl.innerHTML = '<div class="sku-inv-wrap"><div class="sku-inv-title">📦 Đang tải tồn kho...</div></div>';
-  const rows = await invLookupSku(d.sku);
+  let rows;
+  try { rows = await invLookupSku(d.sku); }
+  catch (err) {
+    console.warn('invLookupSku', err);
+    invEl.innerHTML = `<div class="sku-inv-wrap">
+      <div class="sku-inv-title">📦 Tồn kho theo chi nhánh <a class="sku-inv-link" onclick="openInvLookupWithSku('${d.sku}','${(d.name||d.sku).replace(/'/g,"\\'")}','${unit}')">Mở Tra cứu tồn kho ↗</a></div>
+      <div class="sku-inv-nodata" style="color:var(--red)">⚠ Không kiểm tra được tồn kho (lỗi kết nối) — thử lại sau</div>
+    </div>`;
+    return;
+  }
   if (!rows.length) {
     invEl.innerHTML = `<div class="sku-inv-wrap">
       <div class="sku-inv-title">📦 Tồn kho theo chi nhánh <a class="sku-inv-link" onclick="openInvLookupWithSku('${d.sku}','${(d.name||d.sku).replace(/'/g,"\\'")}','${unit}')">Mở Tra cứu tồn kho ↗</a></div>
@@ -2722,10 +2836,13 @@ async function deleteOrder(idx, e){
   e.stopPropagation();
   const o = window._savedOrders[idx];
   if (!o || !confirm('Xoá đơn này?')) return;
+  const sb = getSb();
+  if (sb) {
+    const { error } = await sb.from('orders').delete().eq('id',o.id);
+    if (error) { toast('Lỗi xoá đơn trên server: ' + error.message, 'error'); return; }
+  }
   const list = getSaved().filter(s => s.id !== o.id);
   setSaved(list);
-  const sb = getSb();
-  if (sb) { await sb.from('orders').delete().eq('id',o.id); }
   window._savedModalHadDeletion = true;
   await refreshSavedUI(); renderSavedModal(); toast('Đã xoá','info');
 }
@@ -2812,13 +2929,16 @@ async function importOrders(event){
       incoming.forEach(o=>{ if(!o.id||!Array.isArray(o.cart)){skipped++;return;} if(existingIds.has(o.id))skipped++; else{existing.unshift(o);existingIds.add(o.id);added++;} });
       setSaved(existing);
       const sb=getSb();
+      let syncErr=0;
       if(sb&&added>0){
         const newOrders=incoming.filter(o=>o.id&&Array.isArray(o.cart));
         for(const o of newOrders){
-          await sb.from('orders').upsert({id:o.id,name:o.name,saved_at:o.savedAt,total:o.total,cart:o.cart,form:o.form,selected_notice:o.selectedNotice||0});
+          const {error}=await sb.from('orders').upsert({id:o.id,name:o.name,saved_at:o.savedAt,total:o.total,cart:o.cart,form:o.form,selected_notice:o.selectedNotice||0});
+          if(error)syncErr++;
         }
       }
       await refreshSavedUI();renderSavedModal();
+      if(syncErr){toast(`⚠ ${syncErr} đơn chưa lưu được lên server (chỉ có trên máy này)`,'error');return;}
       if(added>0&&skipped===0)toast(`✅ Đã nhập ${added} đơn thành công`,'success');
       else if(added>0)toast(`✅ Nhập ${added} đơn mới · Bỏ qua ${skipped} trùng`,'success');
       else toast(`Tất cả ${skipped} đơn đã tồn tại`,'info');
@@ -3153,26 +3273,32 @@ async function advanceStatus(key) {
   if (key === 'confirmed') {
     const skusInCart = cart.filter(p => p.sku && !p.promo).map(p => p.sku);
     if (skusInCart.length) {
-      const invMap = await invLookupSkus(skusInCart);
-      const missing = cart.filter(p => p.sku && !p.promo && !(invMap[p.sku.toLowerCase()]||[]).length);
-      if (missing.length) {
-        const names = missing.slice(0,3).map(p => `• ${p.name} (${p.sku})`).join('\n');
-        const more  = missing.length > 3 ? `\n  ...và ${missing.length-3} SP khác` : '';
-        if (!confirm(`⚠ Không có dữ liệu tồn kho cho:\n${names}${more}\n\nVẫn chốt đơn?`)) return;
+      let invMap = null;
+      try { invMap = await invLookupSkus(skusInCart); }
+      catch (err) {
+        console.warn('invLookupSkus', err);
+        toast('Không kiểm tra được tồn kho (lỗi kết nối)', 'error');
+        if (!confirm('⚠ Không kiểm tra được tồn kho (lỗi kết nối).\n\nVẫn chốt đơn mà không kiểm tra tồn?')) return;
+      }
+      const missing = invMap ? cart.filter(p => p.sku && !p.promo && !(invMap[_invKey(p.sku)]||[]).length) : [];
+      if (!invMap) {
+        // bỏ qua kiểm tra tồn — người dùng đã xác nhận ở trên
       } else {
-        const low = cart.filter(p => {
-          if (!p.sku || p.promo) return false;
-          const total = (invMap[p.sku.toLowerCase()]||[]).reduce((s,r) => s + _parseInvQty(r.cuoiKy), 0);
-          return total > 0 && total < p.qty;
-        });
-        if (low.length) {
-          const names = low.slice(0,3).map(p => {
-            const total = (invMap[p.sku.toLowerCase()]||[]).reduce((s,r) => s + _parseInvQty(r.cuoiKy), 0);
-            return `• ${p.name}: cần ${p.qty}, tổng tồn ${total.toLocaleString('vi-VN')}`;
-          }).join('\n');
-          const more = low.length > 3 ? `\n  ...và ${low.length-3} SP khác` : '';
-          if (!confirm(`⚠ Tồn kho (tổng tất cả chi nhánh) có thể không đủ:\n${names}${more}\n\nVẫn tiếp tục chốt đơn?`)) return;
+        // Gộp cả 2 loại cảnh báo vào 1 hộp xác nhận — xác nhận SP chưa có dữ liệu không được che SP thiếu tồn
+        const totalOf = p => (invMap[_invKey(p.sku)]||[]).reduce((s,r) => s + _parseInvQty(r.cuoiKy), 0);
+        const low = cart.filter(p => p.sku && !p.promo && !missing.includes(p) && totalOf(p) < p.qty); // gồm cả tổng tồn = 0
+        const parts = [];
+        if (missing.length) {
+          const names = missing.slice(0,3).map(p => `• ${p.name} (${p.sku})`).join('\n');
+          const more  = missing.length > 3 ? `\n  ...và ${missing.length-3} SP khác` : '';
+          parts.push(`Không có dữ liệu tồn kho cho:\n${names}${more}`);
         }
+        if (low.length) {
+          const names = low.slice(0,3).map(p => `• ${p.name}: cần ${p.qty}, tổng tồn ${totalOf(p).toLocaleString('vi-VN')}`).join('\n');
+          const more = low.length > 3 ? `\n  ...và ${low.length-3} SP khác` : '';
+          parts.push(`Tồn kho (tổng tất cả chi nhánh) có thể không đủ:\n${names}${more}`);
+        }
+        if (parts.length && !confirm(`⚠ ${parts.join('\n\n⚠ ')}\n\nVẫn tiếp tục chốt đơn?`)) return;
       }
     }
   }
@@ -3188,11 +3314,11 @@ async function advanceStatus(key) {
   _currentOrderStatus = {..._currentOrderStatus, status:key, ...extra, status_timestamps:newTs};
   _hasUnsavedChanges = false;
   _expandedStep = null;
-  await _persistOrderStatus();
+  const saved = await _persistOrderStatus();
   renderTrackCurrentOrder();
   await loadTrackOrders();
   const s = ORDER_STATUS_FLOW.find(s=>s.key===key);
-  toast(`Cập nhật: ${s?.label}`, 'success');
+  if (saved) toast(`Cập nhật: ${s?.label}`, 'success');
 }
 
 async function saveStepEdit(key) {
@@ -3206,10 +3332,10 @@ async function saveStepEdit(key) {
     _currentOrderStatus = {..._currentOrderStatus, shipping_provider_id: shipId, tracking_code: trackCode};
   }
   _editingStep = null;
-  await _persistOrderStatus();
+  const saved = await _persistOrderStatus();
   renderTrackCurrentOrder();
   await loadTrackOrders();
-  toast('Đã cập nhật thông tin bước', 'success');
+  if (saved) toast('Đã cập nhật thông tin bước', 'success');
 }
 
 async function jumpStatus(key) {
@@ -3226,7 +3352,7 @@ async function _persistOrderStatus() {
   if (idx>=0) { list[idx]={...list[idx],..._currentOrderStatus}; setSaved(list); }
   const sb = getSb();
   if (sb) {
-    await sb.from('orders').update({
+    const { error } = await sb.from('orders').update({
       status: _currentOrderStatus.status,
       erp_code: _currentOrderStatus.erp_code||'',
       pharmacy_id: _currentOrderStatus.pharmacy_id||null,
@@ -3234,7 +3360,9 @@ async function _persistOrderStatus() {
       shipping_provider_id: _currentOrderStatus.shipping_provider_id||null,
       status_timestamps: _currentOrderStatus.status_timestamps||{}
     }).eq('id', orderId);
+    if (error) { toast('Lỗi lưu trạng thái lên server: ' + error.message, 'error'); return false; }
   }
+  return true;
 }
 
 /* ── Unsaved badge ── */
@@ -3560,8 +3688,10 @@ async function savePharmacy() {
   const editId = document.getElementById('pharmEditId').value;
   const sb = getSb();
   if (sb) {
-    if (editId) await sb.from('pharmacies').update({name,code,phone}).eq('id',editId);
-    else await sb.from('pharmacies').insert({name,code,phone});
+    const { error } = editId
+      ? await sb.from('pharmacies').update({name,code,phone}).eq('id',editId)
+      : await sb.from('pharmacies').insert({name,code,phone});
+    if (error) { toast('Lỗi lưu nhà thuốc: ' + error.message, 'error'); return; }
   } else {
     const id = editId||'local-'+Date.now();
     if (editId) { const idx=pharmacies.findIndex(p=>p.id===editId); if(idx>=0) pharmacies[idx]={id,name,code,phone}; }
@@ -3574,8 +3704,10 @@ async function savePharmacy() {
 async function deletePharmacy(id) {
   if (!confirm('Xoá nhà thuốc này?')) return;
   const sb = getSb();
-  if (sb) await sb.from('pharmacies').delete().eq('id',id);
-  else pharmacies = pharmacies.filter(p=>p.id!==id);
+  if (sb) {
+    const { error } = await sb.from('pharmacies').delete().eq('id',id);
+    if (error) { toast('Lỗi xoá nhà thuốc: ' + error.message, 'error'); return; }
+  } else pharmacies = pharmacies.filter(p=>p.id!==id);
   await loadPharmacies(); renderPharmList();
 }
 
@@ -3614,8 +3746,10 @@ async function saveShippingProvider() {
   const editId = document.getElementById('shipEditId').value;
   const sb = getSb();
   if (sb) {
-    if (editId) await sb.from('shipping_providers').update({name,code}).eq('id',editId);
-    else await sb.from('shipping_providers').insert({name,code});
+    const { error } = editId
+      ? await sb.from('shipping_providers').update({name,code}).eq('id',editId)
+      : await sb.from('shipping_providers').insert({name,code});
+    if (error) { toast('Lỗi lưu nhà vận chuyển: ' + error.message, 'error'); return; }
   } else {
     const id = editId||'local-'+Date.now();
     if (editId) { const idx=shippingProviders.findIndex(p=>p.id===editId); if(idx>=0) shippingProviders[idx]={id,name,code}; }
@@ -3628,8 +3762,10 @@ async function saveShippingProvider() {
 async function deleteShipProvider(id) {
   if (!confirm('Xoá nhà vận chuyển này?')) return;
   const sb = getSb();
-  if (sb) await sb.from('shipping_providers').delete().eq('id',id);
-  else shippingProviders = shippingProviders.filter(p=>p.id!==id);
+  if (sb) {
+    const { error } = await sb.from('shipping_providers').delete().eq('id',id);
+    if (error) { toast('Lỗi xoá nhà vận chuyển: ' + error.message, 'error'); return; }
+  } else shippingProviders = shippingProviders.filter(p=>p.id!==id);
   await loadShippingProviders(); renderShipList();
 }
 
