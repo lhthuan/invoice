@@ -2897,24 +2897,36 @@ async function filterSavedList(q){
       const{data}=await sb.from('orders').select('*').order('saved_at',{ascending:false}).limit(500);
       if(data)list=data.map(_mapOrder);
     } else {
-      const PAGE=1000, rows=[];
+      const PAGE=1000;
       const safe = kw.replace(/[,()*%\\"']/g,' ').trim();
       const empIds = employees.filter(e=>(e.name||'').toLowerCase().includes(kw)).map(e=>e.id);
-      for(let from=0;;from+=PAGE){
-        let qb=sb.from('orders').select('*');
-        if(creator) qb=qb.eq('created_by',creator);
-        if(status)  qb=qb.eq('status',status);
-        if(safe){
-          const conds=['id','name','form->>receiverName','form->>senderName','form->>receiverPhone','form->>senderPhone']
-            .map(c=>`${c}.ilike.%${safe}%`);
-          if(empIds.length) conds.push(`created_by.in.(${empIds.join(',')})`);
-          qb=qb.or(conds.join(','));
+      const fetchAll = async (useOr) => {
+        const rows=[];
+        for(let from=0;;from+=PAGE){
+          let qb=sb.from('orders').select('*');
+          if(creator) qb=qb.eq('created_by',creator);
+          if(status)  qb=qb.eq('status',status);
+          if(useOr && safe){
+            const conds=['id','name','form->>receiverName','form->>senderName','form->>receiverPhone','form->>senderPhone']
+              .map(c=>`${c}.ilike.%${safe}%`);
+            if(empIds.length) conds.push(`created_by.in.(${empIds.join(',')})`);
+            qb=qb.or(conds.join(','));
+          }
+          const{data,error}=await qb.order('saved_at',{ascending:false}).range(from,from+PAGE-1);
+          if(error) return {error};
+          rows.push(...data);
+          if(data.length<PAGE) break;
         }
-        const{data,error}=await qb.order('saved_at',{ascending:false}).range(from,from+PAGE-1);
-        if(error){toast('Lỗi tìm đơn: '+error.message,'error');return;}
-        rows.push(...data);
-        if(data.length<PAGE) break;
+        return {rows};
+      };
+      let res = await fetchAll(true);
+      if(res.error){
+        // cú pháp .or() lỗi → tải toàn bộ rồi lọc ở trình duyệt
+        console.error('[filterSavedList] truy vấn .or() lỗi, dùng lọc phía client:', res.error);
+        res = await fetchAll(false);
+        if(res.error){toast('Lỗi tìm đơn: '+res.error.message,'error');return;}
       }
+      const rows = res.rows;
       list=rows.map(_mapOrder);
     }
   }
