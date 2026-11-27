@@ -3426,10 +3426,35 @@ async function refreshApp() {
 }
 
 /* ── Phone history lookup ── */
-function lookupByPhone() {
+async function lookupByPhone() {
   const rawPhone = (document.getElementById('lookupPhoneInput')?.value || '').trim();
   if (!rawPhone) { toast('Nhập số điện thoại cần tìm', 'error'); return; }
-  const all = [...(window._trackOrders || []), ...(window._savedOrders || [])];
+  let all = [...(window._trackOrders || []), ...(window._savedOrders || [])];
+  // Truy vấn toàn bộ dữ liệu trên server (không giới hạn 500 đơn gần nhất)
+  const sb = getSb();
+  if (sb) {
+    const PAGE = 1000;
+    const safe = rawPhone.replace(/[,()*%\\"']/g, ' ').trim();
+    const fetchAll = async (useOr) => {
+      const rows = [];
+      for (let from = 0; ; from += PAGE) {
+        let qb = sb.from('orders').select('*');
+        if (useOr) qb = qb.or(`form->>senderPhone.ilike.%${safe}%,form->>receiverPhone.ilike.%${safe}%`);
+        const { data, error } = await qb.order('saved_at', { ascending: false }).range(from, from + PAGE - 1);
+        if (error) return { error };
+        rows.push(...data);
+        if (data.length < PAGE) break;
+      }
+      return { rows };
+    };
+    let res = await fetchAll(true);
+    if (res.error) {
+      console.error('[lookupByPhone] truy vấn .or() lỗi, dùng lọc phía client:', res.error);
+      res = await fetchAll(false);
+    }
+    if (res.error) toast('Lỗi tra cứu trên server: ' + res.error.message, 'error');
+    else all = res.rows.map(_mapOrder);
+  }
   const seen = new Set();
   const contacts = [];
   all.forEach(o => {
