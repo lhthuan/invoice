@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thử API ERPStock</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#f5f7f6;color:#1a2b24}
+  .box{max-width:1000px;margin:auto}
+  h1{font-size:18px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  label{font-size:12px;font-weight:600;display:flex;flex-direction:column;gap:3px;flex:1;min-width:140px}
+  input,select{padding:7px 9px;border:1.5px solid #c9d6d0;border-radius:6px;font-size:13px}
+  button{padding:8px 16px;border:0;border-radius:6px;background:#0a6b4a;color:#fff;font-weight:700;cursor:pointer}
+  button:disabled{opacity:.5}
+  #status{font-size:12.5px;margin:10px 0;font-family:ui-monospace,monospace;white-space:pre-wrap}
+  .err{color:#b3261e}
+  .table-wrap{overflow:auto;max-height:60vh;background:#fff;border:1px solid #dde6e1;border-radius:6px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{padding:5px 8px;border-bottom:1px solid #eef2f0;text-align:left;white-space:nowrap}
+  th{position:sticky;top:0;background:#e8f1ed}
+  details{margin-top:10px;font-size:12px}
+  pre{background:#fff;padding:8px;border-radius:6px;overflow:auto;max-height:240px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Thử API ERPStock</h1>
+  <div class="row">
+    <label>X-API-Key <input id="key" type="password" placeholder="dán khóa vào đây (không lưu)"></label>
+    <label>action
+      <select id="action"><option>inventory</option><option>uom</option><option>all</option></select>
+    </label>
+    <label>page <input id="page" type="number" value="1" min="1"></label>
+    <label>limit <input id="limit" type="number" value="20" min="1" max="5000"></label>
+  </div>
+  <div class="row">
+    <label>item_no <input id="item_no" placeholder="SKU001"></label>
+    <label>source_code <input id="source_code" placeholder="01"></label>
+    <label>location_code <input id="location_code" placeholder="TS01"></label>
+  </div>
+  <button id="go" onclick="callApi()">Gọi API</button>
+  <div id="status"></div>
+  <div class="table-wrap" id="out"></div>
+  <details><summary>JSON thô</summary><pre id="raw"></pre></details>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const BASE = 'https://trungsoncare.com/api/ERPStock.php';
+
+function esc(v){ return String(v ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function renderTable(rows){
+  if (!rows.length) return '<div style="padding:12px">Không có dòng nào</div>';
+  const cols = Object.keys(rows[0]);
+  return '<table><thead><tr>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' + cols.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('') +
+    '</tbody></table>';
+}
+
+// Tìm mảng dòng dữ liệu trong JSON trả về (API có thể bọc trong data/items/...)
+function findRows(j){
+  if (Array.isArray(j)) return j;
+  for (const k of ['data','items','rows','result','inventory']) if (Array.isArray(j?.[k])) return j[k];
+  return null;
+}
+
+async function callApi(){
+  const key = $('key').value.trim();
+  if (!key) { $('status').innerHTML = '<span class="err">Chưa nhập X-API-Key</span>'; return; }
+  const p = new URLSearchParams({ action: $('action').value, page: $('page').value, limit: $('limit').value });
+  ['item_no','source_code','location_code'].forEach(k => { if ($(k).value.trim()) p.set(k, $(k).value.trim()); });
+  const url = `${BASE}?${p}`;
+  $('go').disabled = true; $('out').innerHTML = ''; $('raw').textContent = '';
+  $('status').textContent = 'Đang gọi ' + url + ' ...';
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { headers: { 'X-API-Key': key } });
+    const text = await res.text();
+    const ms = Math.round(performance.now() - t0);
+    let j; try { j = JSON.parse(text); } catch { j = null; }
+    $('status').innerHTML = `HTTP ${res.status} · ${ms} ms · ${(text.length/1024).toFixed(1)} KB` +
+      (res.ok ? '' : '<br><span class="err">Server trả lỗi, xem JSON thô bên dưới</span>');
+    $('raw').textContent = j ? JSON.stringify(j, null, 2).slice(0, 20000) : text.slice(0, 20000);
+    const rows = j && findRows(j);
+    if (rows) $('out').innerHTML = renderTable(rows);
+    else if (j && typeof j === 'object') {
+      // action=all: có thể trả nhiều mảng
+      const parts = Object.entries(j).filter(([,v]) => Array.isArray(v));
+      $('out').innerHTML = parts.length
+        ? parts.map(([k,v]) => `<div style="padding:6px 8px;font-weight:700">${esc(k)} (${v.length} dòng)</div>` + renderTable(v)).join('')
+        : '<div style="padding:12px">Không nhận ra dạng dữ liệu, xem JSON thô</div>';
+    }
+  } catch (e) {
+    $('status').innerHTML = '<span class="err">Lỗi: ' + esc(e.message) + '</span>\n' +
+      'Nếu là "Failed to fetch": thường do trình duyệt chặn CORS (server không cho phép gọi từ trang này) hoặc mất mạng.';
+  } finally { $('go').disabled = false; }
+}
+</script>
+</body>
+</html>
