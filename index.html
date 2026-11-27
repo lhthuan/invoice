@@ -2889,7 +2889,36 @@ async function filterSavedList(q){
   const creator  = document.getElementById('modalFilterCreator')?.value||'';
   const status   = document.getElementById('modalFilterStatus')?.value||'';
   const sb=getSb(); let list=getSaved();
-  if(sb){const{data}=await sb.from('orders').select('*').order('saved_at',{ascending:false}).limit(500);if(data)list=data.map(_mapOrder);}
+  // Không lọc gì → chỉ 500 đơn gần nhất; có lọc/tìm → truy vấn toàn bộ dữ liệu trên server
+  const hasFilter = !!(kw||dateFrom||dateTo||creator||status);
+  const seq = window._savedFilterSeq = (window._savedFilterSeq||0) + 1;
+  if(sb){
+    if(!hasFilter){
+      const{data}=await sb.from('orders').select('*').order('saved_at',{ascending:false}).limit(500);
+      if(data)list=data.map(_mapOrder);
+    } else {
+      const PAGE=1000, rows=[];
+      const safe = kw.replace(/[,()*%\\"']/g,' ').trim();
+      const empIds = employees.filter(e=>(e.name||'').toLowerCase().includes(kw)).map(e=>e.id);
+      for(let from=0;;from+=PAGE){
+        let qb=sb.from('orders').select('*');
+        if(creator) qb=qb.eq('created_by',creator);
+        if(status)  qb=qb.eq('status',status);
+        if(safe){
+          const conds=['id','name','form->>receiverName','form->>senderName','form->>receiverPhone','form->>senderPhone']
+            .map(c=>`${c}.ilike.%${safe}%`);
+          if(empIds.length) conds.push(`created_by.in.(${empIds.join(',')})`);
+          qb=qb.or(conds.join(','));
+        }
+        const{data,error}=await qb.order('saved_at',{ascending:false}).range(from,from+PAGE-1);
+        if(error){toast('Lỗi tìm đơn: '+error.message,'error');return;}
+        rows.push(...data);
+        if(data.length<PAGE) break;
+      }
+      list=rows.map(_mapOrder);
+    }
+  }
+  if(seq!==window._savedFilterSeq) return; // có lần tìm mới hơn, bỏ kết quả cũ
   let filtered=list;
   if(kw) filtered=filtered.filter(o=>{const f=o.form||{};const emp=employees.find(e=>e.id===o.created_by);return(o.id||'').toLowerCase().includes(kw)||(o.name||'').toLowerCase().includes(kw)||(f.receiverName||'').toLowerCase().includes(kw)||(f.senderName||'').toLowerCase().includes(kw)||(f.receiverPhone||'').toLowerCase().includes(kw)||(f.senderPhone||'').toLowerCase().includes(kw)||((emp?.name||'').toLowerCase()).includes(kw);});
   if(dateFrom) filtered=filtered.filter(o=>{const d=o.createdAt||o.savedAt;return d&&d>=dateFrom;});
@@ -2903,7 +2932,7 @@ async function filterSavedList(q){
     return db.localeCompare(da);
   });
   window._savedOrders=filtered;
-  _renderSavedList(filtered,'savedListModal',500);
+  _renderSavedList(filtered,'savedListModal',hasFilter?0:500);
 }
 
 /* ══ EXPORT / IMPORT JSON ══ */
